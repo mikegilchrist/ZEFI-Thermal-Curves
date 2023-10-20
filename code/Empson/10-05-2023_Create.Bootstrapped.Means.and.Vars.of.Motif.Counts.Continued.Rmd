@@ -1,0 +1,111 @@
+---
+title: "Gilchrist- Bootstrapping Motif Mean and Variance"
+author: "Tara Empson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Goal
+
+Create a bootstrapped dataset from the mean number of songs from male zebra finch, repeatidly tested in 40C.
+
+# Background
+
+Kayci Messerly, a previous post-bac, preformed multiple tests of trying to see how male zebra finch song varies in heat. Being an animal behavoir study there is a lot of variation and a very limited sample size. 
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(modelr)
+library(infer)
+library(mosaic)
+library(janitor)
+library(boot)
+```
+
+# Local Functions
+
+```{r}
+
+# Function won't work if you use function(..., raw.data = raw.data)
+# Why? R doesn't know which raw.data you mean (local or global)
+# This is why you sometimes see .data as an argument name
+
+bootstrapMeanAndVarOfColumn<- function(male, sample = 1000, col.name = "motif_count", data.raw = raw.data) {
+
+  my_means <- vector(mode="double", length = sample)
+  my_vars <- my_means
+
+  data <- data.raw %>%
+    filter(male %in% male) %>% 
+    select(male, all_of(col.name)) # tidy warning told me to use 'all_of()' around col.name
+  for(i in 1:sample){
+    bootstrap_sample <- sample(raw.data$motif_count,n, replace = TRUE)
+    my_means[i] <- mean(bootstrap_sample)
+    my_vars[i] <- var(my_means)   
+  }
+  results <- tibble(male = male, mean =  my_means, var = my_vars)
+  return(results)
+}
+
+```
+# Bootstraping data
+
+## Load Data & Define Parameters
+
+```{r}
+setwd("../../data/collated/")
+set.seed(1)
+raw.data <- read.csv("HSPi-Repeatability-Song-Count.csv")
+raw.data$day<- c(1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3)
+#adding in day order
+
+unique.male <- unique(raw.data$male)
+
+n_sample <- 1000
+n <- 3
+#my_means <- 1:1000
+#my_var <- 1:1000
+```
+
+## Bootstrap Data to Get Sample of Means and Vars for Each Male
+
+```{r}
+
+
+
+## Create tibble of mean and var from bootstrapped data
+bs_stats  <- lapply(unique.male, bootstrapMeanAndVarOfColumn) %>%
+  ## Combine bootstraped stats across males
+  ## Note bind_rows will only work for a list, if you use sapply() you'll have a matrix of matricies
+  bind_rows()
+
+dim(bs_stats)
+
+```
+
+## Editing data to be the mean of the bootstrapped means and mean of the bootstrapped variance. I couldn't think of an efficient way to only keep one row for each male.
+```{r}
+simplified<- bs_stats %>% 
+    group_by(male) %>% 
+    mutate(mean.mean=mean(mean)) %>% 
+    mutate(mean.var= mean(var)) %>% 
+    select(male, mean.mean, mean.var)
+```
+
+
+
+# I was able to make a good graph
+- the Linear and Quad curves don't seem very different.
+```{r}
+simplified %>% 
+    ggplot(aes(x=mean.mean, y=mean.var))+
+     geom_point()+
+    geom_smooth(method = "lm", formula = y ~ x, color="blue")+
+    geom_smooth(method = "lm", formula = y ~ x + I(x^2), color="red")+
+    labs(x="Mean of Mean Number of Motifs", y="Variance of Mean Number of Motifs", caption = "Red line is quadradic and Blue is linear.", title="Bootstraping 1000 replications for each bird")+
+    theme_classic()
+```
+
+

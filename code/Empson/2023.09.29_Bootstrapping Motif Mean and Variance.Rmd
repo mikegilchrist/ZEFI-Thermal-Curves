@@ -1,0 +1,124 @@
+---
+title: "Gilchrist- Bootstrapping Motif Mean and Variance"
+author: "Tara Empson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# Bootstraping data
+
+
+```{r}
+library(tidyverse)
+library(modelr)
+library(infer)
+library(mosaic)
+library(janitor)
+library(boot)
+```
+
+Load in raw Data and tried to write a function
+```{r}
+setwd("../../data/collated/")
+set.seed(1)
+raw.data <- read.csv("HSPi-Repeatability-Song-Count.csv")
+raw.data$day<- c(1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3)
+#adding in day order
+
+wide.data <- ?pivot_wider(data=raw.data,names_from = day,values_from = c(motif_count, date, temp_mean, temp_median, humidity_mean ))
+
+unique.male <- print(unique(raw.data$male))
+
+n_sample <- 1000
+n <- 3
+my_means <- 1:1000
+my_var <- 1:1000
+
+
+ BOOTSTRAP<- function(f, unique.male) {
+    raw.data %>%
+    filter(male==f) %>% 
+    select(male, motif_count)
+     for(i in 1:n_sample){
+         bootstrap_sample <- sample(raw.data$motif_count,n, replace = TRUE)
+         my_means[i] <- mean(bootstrap_sample)
+         my_var[i] <- sqrt(sd(my_means))
+         mean.of.means<- mean(my_means)
+         var.of.means <- mean(my_var)
+         result<- cbind.data.frame(mean.of.means,var.of.means)
+     }
+}
+
+Results <- lapply(unique.male, BOOTSTRAP)
+output <- cbind(unique.male,Results)
+
+
+```
+
+Couldn't get a function to work so tried to make a for loop
+```{r}
+for (f in 1:length(unique.male)){
+    raw.data %>%
+    filter(male==f) %>%
+    select(male, motif_count)
+     for(i in 1:n_sample){
+         bootstrap_sample <- sample(raw.data$motif_count,n, replace = TRUE)
+         my_means[i] <- mean(bootstrap_sample)
+         my_var[i] <- sqrt(sd(my_means))
+         mean.of.means<- mean(my_means)
+         var.of.means <- mean(my_var)
+         
+         result<- cbind.data.frame(f, mean.of.means,var.of.means)
+         output <-rbind.data.frame(f, result)
+         }
+}
+
+```
+
+
+Couldn't get that to work either so white knuckling it
+```{r}
+unique.male
+a <- "T247"
+b <- "T236" 
+c <- "T243"
+d <- "T234"
+e <- "T244" 
+f <- "T231" 
+g <- "T235"
+h <- "T229"
+j <- "T237"
+k <- "T230"
+
+n_sample <- 1000
+n <- 3
+my_means <- 1:1000
+my_var <- 1:1000
+
+{raw.data %>%
+    filter(male==k) %>% 
+    select(male, motif_count)
+     for(i in 1:n_sample){
+         bootstrap_sample <- sample(raw.data$motif_count,n, replace = TRUE)
+         my_means[i] <- mean(bootstrap_sample)
+         my_var[i] <- sqrt(sd(my_means))
+         mean.of.means<- mean(my_means)
+         var.of.means <- mean(my_var)
+         result<- cbind.data.frame(mean.of.means,var.of.means)
+         k.m.v <- result}}
+id <- c("T247", "T236" ,"T243", "T234","T244" ,"T231" ,"T235","T229","T237","T230")
+dataset=as.data.frame(rbind(a.m.v, b.m.v, c.m.v, d.m.v, e.m.v, f.m.v, g.m.v, h.m.v, j.m.v, h.m.v))
+new.data<- cbind(id,dataset)
+```
+
+
+```{r}
+new.data %>% 
+    ggplot(aes(x=mean.of.means, y=var.of.means))+
+     geom_point()+
+    geom_smooth(method = "lm", formula = y ~ x)+
+    geom_smooth(method = "lm", formula = y ~ x + I(x^2), color="red")+
+    labs(x="Mean of Mean Number of Motifs", y="Variance of Mean Number of Motifs", caption = "Red line is quadradic and Blue is linear.", title="Bootstraping 1000 replications for each bird")+
+    theme_classic()
+
+```
+

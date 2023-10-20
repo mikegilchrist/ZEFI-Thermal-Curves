@@ -1,0 +1,131 @@
+---
+title: "Gilchrist- Bootstrapping Motif Mean and Variance"
+author: "Tara Empson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Goal
+
+Create a bootstrapped dataset from the mean number of songs from male zebra finch, repeatidly tested in 40C.
+
+# Background
+
+Kayci Messerly, a previous post-bac, preformed multiple tests of trying to see how male zebra finch song varies in heat. Being an animal behavior study there is a lot of variation and a very limited sample size. 
+
+# Libraries
+
+```{r message=FALSE}
+library(tidyverse)
+library(modelr)
+library(infer)
+library(mosaic)
+library(janitor)
+library(boot)
+library(brms)
+```
+
+# Bootstraping data
+
+## Load Data & Define Parameters
+```{r}
+setwd("../../data/collated/")
+set.seed(1)
+raw.data <- read.csv("HSPi-Repeatability-Song-Count.csv")
+raw.data$day<- c(1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3)
+#adding in day order
+unique.male <- unique(raw.data$male)
+n <- 3
+sample = 1000
+col.name = "motif_count"
+my_means <- vector(mode="double", length = sample)
+my_vars <- my_means
+```
+
+### Bootstrap still wasn't pulling from within each individual. Worked on it more for a while and got it working. So now the male who did not sing in any trial has 0 mean and 0 var.
+```{r}
+boot_male <-function(one_male, boot_set){
+  sample<-1000
+  data <- raw.data %>%
+    filter(male == one_male)
+  for(i in 1:sample){
+    bootstrap_sample <- sample(data$motif_count,n, replace = TRUE)
+    my_means[i] <- mean(bootstrap_sample)
+    my_vars[i] <- var(my_means)   
+    results <- tibble(male = one_male, a.mean =  my_means, b.var = my_vars)
+  }
+boot_set<-  rbind(boot_set, results)
+return(boot_set)
+}
+
+out <- tibble()
+full.boot <- bind_rows(lapply(unique.male,boot_male, out))
+
+```
+
+
+```{r}
+simplified<- full.boot %>% 
+    group_by(male) %>% 
+  mutate(sd.mean=sd(a.mean)) %>% 
+  mutate(sd.var=sd(b.var)) %>% 
+  mutate(mean.mean=mean(a.mean)) %>% 
+  mutate(mean.var=mean(b.var)) %>% 
+  select(-a.mean, -b.var)
+ 
+simply <- unique(simplified)
+
+```
+
+
+
+# Graph Remake
+```{r}
+simply %>% 
+    ggplot(aes(x=mean.mean, y=mean.var))+
+     geom_point()+
+  geom_errorbar(aes(ymin=mean.var-sd.var, ymax=mean.var+sd.var))+
+  geom_errorbar(aes(xmin=mean.mean-sd.mean, xmax=mean.mean+sd.mean))+
+    geom_smooth(method = "lm", formula = y ~ x, color="blue")+
+    geom_smooth(method = "lm", formula = y ~ x + I(x^2), color="red")+
+    labs(x="Mean of Mean Number of Motifs", y="Variance of Mean Number of Motifs", caption = "Red line is quadradic and Blue is linear.", title="Bootstraping 1000 replications for each bird")+
+    theme_classic()
+```
+
+##Excluding T230
+```{r}
+simplified.omit <- simply %>% 
+  filter(male!="T230")
+simplified.omit %>% 
+    ggplot(aes(x=mean.mean, y=mean.var))+
+     geom_point()+
+  geom_errorbar(aes(ymin=mean.var-sd.var, ymax=mean.var+sd.var))+
+  geom_errorbar(aes(xmin=mean.mean-sd.mean, xmax=mean.mean+sd.mean))+
+    geom_smooth(method = "lm", formula = y ~ x, color="blue")+
+    geom_smooth(method = "lm", formula = y ~ x + I(x^2), color="red")+
+    labs(x="Mean of Mean Number of Motifs", y="Variance of Mean Number of Motifs", caption = "Red line is quadradic and Blue is linear.", title="Bootstraping 1000 replications for each bird- T230 Omitted")+
+    theme_classic()+
+  annotate("text", x = 75, y = 12000, 
+             label = "Not much changed",
+             family = "Arial",
+           color="red")
+```
+
+# 1. Filter out birds who didn't sing in a given round.
+- I did this because we are interested in how song production changes at different temperatures, so birds who never sang are not relevant.
+- All birds sang at least once in Round 2 so all were included.
+```{r}
+setwd("../../data/collated/")
+round2 <- read.csv("HSPi-Round-2-Heat-Trials.csv") %>% 
+  select(-mass,-bill_length,-bill_depth,-bill_width,-date_morph_data_collected,-time_spent_panting_30.15_before_female,-time_spent_panting_15.0_before_female,-time_spent_panting_0.15_after_female,-time_spent_panting_15.30_after_female)
+r2 <- round2 %>% 
+  pivot_wider(names_from = test_order, values_from = c(date, temp_target, motif_count, motif_rate, temp_mean, temp_median, humidity_mean))
+```
+
+
+
+# 2. Try to use BRM on round2 data. I don't understand this output and am stopping here.
+```{r}
+fit1 <- brm(motif_count ~ temp_target * male + (1|chamber),
+            data = round2, family = poisson())
+```

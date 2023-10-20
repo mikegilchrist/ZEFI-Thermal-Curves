@@ -12,3 +12,4 @@ tmp*.pdf
 *.pdf
 *tmp
 *.stan
+.DS_Store

@@ -1,0 +1,331 @@
+---
+title: "Gilchrist- Deming and Simulating Data"
+author: "Tara Empson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Goal
+
+Create a linear model and run an anova from bootstrapped dataset from the mean number of songs from male zebra finch, repeatidly tested in 40C.
+
+# Background
+
+Kayci Messerly, a previous post-bac, preformed multiple tests of trying to see how male zebra finch song varies in heat. Being an animal behavior study there is a lot of variation and a very limited sample size. 
+
+# Libraries
+
+```{r message=FALSE}
+setwd("/Users/taraempson/Documents/GitHub/ZEFI-Thermal-Curves/code/Empson")
+library(tidyverse)
+library(janitor)
+library(deming)
+library(patchwork)
+```
+
+# Bootstraping data
+
+## Load Data & Define Parameter
+- Not loading in T230 because he did not sing at all during this round and Deming/Simulating didn't like 0s. 
+```{r}
+setwd("../../data/collated/")
+set.seed(1)
+og.raw.data <- read.csv("HSPi-Repeatability-Song-Count.csv")
+raw.data <- og.raw.data %>% 
+    filter(male!="T230")
+raw.data$day<- c(1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3)
+#adding in day order
+unique.male <- unique(raw.data$male)
+n <- 3
+sample = 1000
+col.name = "motif_count"
+my_means <- vector(mode="double", length = sample)
+my_vars <- my_means
+out <- tibble()
+simulated <- vector()
+```
+
+
+```{r}
+simplified_real <- raw.data %>% 
+    group_by(male) %>% 
+    mutate(real_sd=sd(motif_count)) %>% 
+     mutate(real_mean=mean(motif_count)) %>% 
+    mutate(real_var=var(motif_count)) %>% 
+    select(-chamber, -date, -motif_count, -counter, -temp_target, -temp_mean, -temp_median, -humidity_mean, -day)
+simply_real <- unique(simplified_real)
+```
+
+```{r}
+real <- og.raw.data %>% 
+    group_by(male) %>% 
+    mutate(real_sd=sd(motif_count)) %>% 
+     mutate(real_mean=mean(motif_count)) %>% 
+    mutate(real_var=var(motif_count)) %>% 
+    select(-chamber, -date, -motif_count, -counter, -temp_target, -temp_mean, -temp_median, -humidity_mean)
+real <- unique(real)
+```
+
+### Bootstrap 
+```{r}
+boot_male <-function(one_male, boot_set){
+  sample<-1000
+  data <- raw.data %>%
+    filter(male == one_male)
+  for(i in 1:sample){
+    bootstrap_sample <- sample(data$motif_count,n, replace = TRUE)
+    my_means[i] <- mean(bootstrap_sample)
+    my_vars[i] <- var(my_means)   
+    results <- tibble(male = one_male, a_mean =  my_means, b_var = my_vars)
+  }
+boot_set<-  rbind(boot_set, results)
+return(boot_set)
+}
+
+full.boot <- bind_rows(lapply(unique.male,boot_male, out))
+```
+
+##Simplify the bootstrap to the mean of the means per male and the sd of the means per male. 
+```{r}
+simplified_boot<- full.boot %>% 
+    group_by(male) %>% 
+  mutate(sd_boot_mean=sd(a_mean)) %>% 
+  mutate(sd_boot_var=sd(b_var)) %>% 
+  mutate(mean_boot_mean=mean(a_mean)) %>% 
+  mutate(mean_boot_var=mean(b_var)) %>% 
+  select(-a_mean, -b_var)
+
+simply_boot <- unique(simplified_boot)
+```
+
+### Quadradic (m3) is the best fit model
+```{r}
+m1 <-lm(simply_boot$mean_boot_var~0+simply_boot$mean_boot_mean)
+m2 <- lm(simply_boot$mean_boot_var~1+simply_boot$mean_boot_mean)
+m3 <- lm(simply_boot$mean_boot_var~0+simply_boot$mean_boot_mean+ I(simply_boot$mean_boot_mean^2))
+m4 <- lm(simply_boot$mean_boot_var~1+simply_boot$mean_boot_mean+ I(simply_boot$mean_boot_mean^2))
+anova(m1)
+step(m1) #m1 AIC=133.23
+
+anova(m2)
+step(m2) #m2 AIC=124.43
+
+anova(m3)
+step(m3) #m3 AIC=120.22
+
+anova(m4)
+step(m4) #m4 AIC=121.66
+
+```
+
+## Combine bootstraped data and real data into a dataset.
+```{r}
+combined<- left_join(simply_real, simply_boot, by = join_by(male))
+```
+
+# Deming
+```{r}
+x <- combined$real_mean # Observed Mean for each male
+y <- combined$real_var  # Observed Var for each male
+xstd <- combined$sd_boot_mean # Bootstrapped sd(Mean) for each male
+ystd <- combined$sd_boot_var # Bootstrapped sd(Var) for each male
+
+deming.original <- deming(y ~ x + 0,  # don't know if 0 + x + I(x^2) would work, Error in deming(y ~ x + I(x^2), xstd = xstd, ystd = ystd) : Deming regression requires a single predictor variable
+        xstd=xstd,
+        ystd=ystd
+        )
+a <- as.double(deming.original$coefficients[2])
+
+z <- (0 + x + I(x^2))
+deming.better<- deming(y~z , 
+       xstd=xstd,
+        ystd=ystd
+        )
+b<- as.double(deming.better$coefficients[2])
+```
+
+# Simulate Data
+- Simulating doesn't seem to work with the quadradic slope. (Warning: NAs produced) All were NA, so switched to the other one. 
+```{r}
+simulating.for.boot<- function(a.male,full.results){
+    a_male_data <- combined %>% 
+        filter(male == a.male)
+    for(i in 1:n){
+          simulated[i] <- rnbinom(n=1, size = a_male_data$real_mean/(a-1),p=1/a)
+          results <- tibble(male = a.male, simulated_motif= simulated)
+    }
+full.results<- rbind(results)
+return(full.results)
+}
+
+full.simulated.results <- bind_rows(lapply(unique.male,simulating.for.boot, out))
+
+ 
+simplified_simulated<- full.simulated.results %>% 
+    group_by(male) %>% 
+    mutate(sim_sd=sd(simulated_motif)) %>% 
+    mutate(simulated_mean = mean(simulated_motif)) %>% 
+    mutate(simulated_var = var(simulated_motif)) %>% 
+    select(-simulated_motif)
+simply_simulated <- unique(simplified_simulated)
+```
+
+### Check all its models
+```{r}
+m1 <-lm(simply_simulated$simulated_var~0+simply_simulated$simulated_mean)
+m2 <- lm(simply_simulated$simulated_var~1+simply_simulated$simulated_mean)
+m3 <- lm(simply_simulated$simulated_var~0+simply_simulated$simulated_mean+ I(simply_simulated$simulated_mean^2))
+m4 <- lm(simply_simulated$simulated_var~1+simply_simulated$simulated_mean+ I(simply_simulated$simulated_mean^2))
+anova(m1)
+step(m1) #m1 AIC=145.35
+
+anova(m2)
+step(m2) #m2 AIC=146.49
+
+anova(m3)
+step(m3) #m3 AIC=144.39
+
+anova(m4)
+step(m4) #m4 AIC=145.61
+```
+
+
+#Bootstrap Simulated Data
+```{r}
+sim_boot_male <-function(one_male, boot_set){
+  sample<-1000
+  data <- full.simulated.results %>%
+    filter(male == one_male)
+  for(i in 1:sample){
+    bootstrap_sample <- sample(data$simulated_motif,n, replace = TRUE)
+    my_means[i] <- mean(bootstrap_sample)
+    my_vars[i] <- var(my_means)   
+    results <- tibble(male = one_male, a_mean =  my_means, b_var = my_vars)
+  }
+boot_set<-  rbind(boot_set, results)
+return(boot_set)
+}
+full.sim.boot <- bind_rows(lapply(unique.male,sim_boot_male, out))
+
+simplified_simulated_boot<- full.sim.boot %>% 
+    group_by(male) %>% 
+  mutate(sd_boot_sim_mean=sd(a_mean)) %>% 
+  mutate(sd_boot_sim_var=sd(b_var)) %>% 
+  mutate(mean_boot_sim_mean=mean(a_mean)) %>% 
+  mutate(mean_boot_sim_var=mean(b_var)) %>% 
+  select(-a_mean, -b_var)
+simply_simulated_boot <- unique(simplified_simulated_boot)
+```
+
+#Checking the models
+```{r}
+m1 <-lm(simply_simulated_boot$mean_boot_sim_var~0+simply_simulated_boot$mean_boot_sim_mean)
+m2 <- lm(simply_simulated_boot$mean_boot_sim_var~1+simply_simulated_boot$mean_boot_sim_mean)
+m3 <- lm(simply_simulated_boot$mean_boot_sim_var~0+simply_simulated_boot$mean_boot_sim_mean+ I(simply_simulated_boot$mean_boot_sim_mean^2))
+m4 <- lm(simply_simulated_boot$mean_boot_sim_var~1+simply_simulated_boot$mean_boot_sim_mean+ I(simply_simulated_boot$mean_boot_sim_mean^2))
+
+anova(m1)
+step(m1) #m1 AIC=142.49
+
+anova(m2)
+step(m2) #m2 AIC=135.12
+
+anova(m3)
+step(m3) #m3 AIC=104.19
+
+anova(m4)
+step(m4) #m4 AIC=105.35
+```
+
+
+#Stimulate 1000 Trials
+```{r}
+simulate.entire <- function(a.male,full.results){
+    a_male_data <- combined %>% 
+        filter(male == a.male)
+    for(i in 1:1000){
+          simulated[i] <- rnbinom(n=1, size = a_male_data$real_mean/(a-1),p=1/a)
+          results <- tibble(male = a.male, simulated_motif= simulated)
+    }
+full.results<- rbind(results)
+return(full.results)
+}
+
+simulate.entire.results <- bind_rows(lapply(unique.male,simulate.entire, out))
+
+ 
+simplified_simulated.entire<- simulate.entire.results %>% 
+    group_by(male) %>% 
+    mutate(sim_sd=sd(simulated_motif)) %>% 
+    mutate(simulated_mean = mean(simulated_motif)) %>% 
+    mutate(simulated_var = var(simulated_motif)) %>% 
+    select(-simulated_motif)
+simply_entire.simulated <- unique(simplified_simulated.entire)
+```
+
+
+### Check all its models
+    - m4 is now the best fit.
+```{r}
+m1 <-lm(simply_entire.simulated$simulated_var~0+simply_entire.simulated$simulated_mean)
+m2 <- lm(simply_entire.simulated$simulated_var~1+simply_entire.simulated$simulated_mean)
+m3 <- lm(simply_entire.simulated$simulated_var~0+simply_entire.simulated$simulated_mean+ I(simply_entire.simulated$simulated_mean^2))
+m4 <- lm(simply_entire.simulated$simulated_var~1+simply_entire.simulated$simulated_mean+ I(simply_entire.simulated$simulated_mean^2))
+
+anova(m1)
+step(m1) #m1 AIC=88.92
+
+anova(m2)
+step(m2) #m2 AIC=90.3
+
+anova(m3)
+step(m3) #m3 AIC=86.12
+
+anova(m4)
+step(m4) #m4 AIC=79.9
+```
+
+# Graphing
+```{r}
+strip <- ggh4x::strip_themed(background_x = ggh4x::elem_list_rect(fill = c( "skyblue","skyblue", "slateblue","hotpink", "hotpink")))
+simply_real <- simply_real %>% 
+    mutate(type="Real Data", graph_order=1) %>% 
+    mutate(mean=real_mean, var=real_var, sd_mean=real_sd) %>% 
+    select(-real_sd, -real_mean, -real_var)
+simply_boot <- simply_boot %>% 
+    mutate(type="Bootstrap of Real Data", graph_order=2) %>% 
+    mutate(mean=mean_boot_mean, var=mean_boot_var, sd_mean=sd_boot_mean, sd_var=sd_boot_var) %>% 
+    select(-mean_boot_mean, -mean_boot_var, -sd_boot_mean, -sd_boot_var)
+simply_simulated <- simply_simulated %>% 
+    mutate(type="Simulation of Real Data", graph_order=3) %>% 
+    mutate(mean=simulated_mean, var=simulated_var, sd_mean=sim_sd) %>% 
+    select(-simulated_mean, -simulated_var, -sim_sd)
+simply_simulated_boot <- simply_simulated_boot %>% 
+    mutate(type="Bootstrap of Simulated Data", graph_order=4) %>% 
+    mutate(mean=mean_boot_sim_mean, var=mean_boot_sim_var, sd_mean=sd_boot_sim_mean, sd_var=sd_boot_sim_var) %>% 
+    select(-mean_boot_sim_mean, -mean_boot_sim_var, -sd_boot_sim_mean, -sd_boot_sim_var)
+simply_entire.simulated <- simply_entire.simulated %>% 
+    mutate(type="Simulating 1000 Trials for Each Bird", graph_order=5) %>% 
+    mutate(mean=simulated_mean, var=simulated_var, sd_mean=sim_sd) %>% 
+    select(-simulated_mean, -simulated_var, -sim_sd)
+
+big.combination<- rbind(simply_real, simply_boot, simply_simulated, simply_simulated_boot, simply_entire.simulated) %>%
+    arrange(graph_order)
+big.combination%>% 
+    ggplot(aes(x=mean, y=var))+
+    geom_point()+
+    ggh4x::facet_wrap2(~type, strip = strip)+
+    geom_errorbar(aes(ymin=var-sd_var, ymax=var+sd_var))+
+    geom_errorbar(aes(xmin=mean-sd_mean, xmax=mean+sd_mean))+
+    geom_smooth(method = "lm", formula = y ~ x, color="blue")+
+    geom_smooth(method = "lm", formula = y ~ x + I(x^2), color="red")+
+    labs(x="Mean Number of Motifs", y=str_wrap("Variance in Number of Motifs", width = 16), caption=str_wrap("Purple=Real Pink=Simulated Blue=Bootstraped", width = 8))+
+    ylim(0,NA)+
+    xlim(0,NA)+
+    theme_classic()
+```
+
+```{r}
+
+```
+
