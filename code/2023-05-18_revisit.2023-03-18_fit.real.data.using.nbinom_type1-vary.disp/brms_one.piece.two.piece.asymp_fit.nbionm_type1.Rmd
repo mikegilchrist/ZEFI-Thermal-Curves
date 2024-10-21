@@ -295,7 +295,8 @@ values_disp <- switch(1,
                       c(0.01), # 0.125 is a good value
                       c(0.01, 0.1), #, 0.25), # used in exploring model behavior
                       list(0.1, "flat"), #, 0.1, 1) # doesn't work yet
-                      c("flat"))
+                      c("flat"),
+                      c(0.5)
 
 flags_disp <- c("uniform_1", "uniform_2", "groups_1", "groups_2", "individual")
 

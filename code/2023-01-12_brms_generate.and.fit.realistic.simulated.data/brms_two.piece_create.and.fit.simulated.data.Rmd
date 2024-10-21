@@ -134,7 +134,7 @@ summary(data_ind)
 n_male <- length(unique(data_ind$male))
 
 ## for calculation of 'theta_bar' (size in `rnbinom`) see note in `Set Up Simulate Data`
-summary_stats <- data_ind %>% ungroup() %>%  summarize(y0_bar = mean(y0_simple.est), y0_sd = sd(y0_simple.est), phi_bar = median(phi_ind), theta_bar = y0_bar^2/(y0_sd^2 - y0_bar))
+summary_stats <- data_ind %>% ungroup() %>%  summarize(y0_bar = mean(y0_simple.est), y0_sd = sd(y0_simple.est), phi_bar = median(phi_ind), theta_bar = y0_bar^2/(y0_sd^2 - y0_bar), ln_y0_bar = mean(log(y0_simple.est)),  log_y0_sd = sd(log(y0_simple.est)))
 comment(summary_stats) <- "summary stats for observed bird motifs"
 
 save(summary_stats, file = file.path(output_dir, "obs_summary_stats.Rda"))
@@ -599,7 +599,7 @@ save(file = file.path(output_dir, paste0("fit_tbl_data.Rda-tmp")), fit_tbl)
     }
 }
 
-save(file = file.path(output_dir, paste0("fit_tbl_data_", x_flag_data, "_", y_flag_data, "_n_reps_", n_reps, ".Rda")), fit_tbl)
+save(file = file.path(output_dir, paste0("fit_tbl_data_", x_flag_data, "_", y_flag_data, "_n_reps_", n_reps, ".Rdata")), fit_tbl)
 
 ```
 
