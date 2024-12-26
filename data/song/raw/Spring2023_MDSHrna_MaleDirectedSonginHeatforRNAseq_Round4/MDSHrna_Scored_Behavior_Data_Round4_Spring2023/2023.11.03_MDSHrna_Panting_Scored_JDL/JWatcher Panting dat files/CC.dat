@@ -1,0 +1,42 @@
+FirstLineOfData=25
+#-----------------------------------------------------------
+# Name: CC.dat
+# Format: Focal Data File 1.0
+# Updated: Tue Oct 03 07:10:51 EDT 2023
+#-----------------------------------------------------------
+ 
+FocalMasterFile=/Applications/JWatcher/MDSH_panting_9.15.23.fmf
+ 
+# Observation started: Tue Oct 03 06:55:04 EDT 2023
+StartTime=1696330504667
+# Observation stopped: Tue Oct 03 07:10:04 EDT 2023
+StopTime=1696331404667
+ 
+Answer.1=CC
+Answer.2=1345
+Answer.3=
+Answer.4=
+Answer.5=
+Answer.6=
+ 
+ 
+ 
+#BEGIN DATA
+673, p
+17024, l
+20208, p
+194975, o
+202954, p
+277453, l
+280708, p
+695323, l
+709158, p
+755152, l
+761923, p
+792103, l
+841355, p
+865017, l
+868638, p
+882177, l
+892603, p
+900000, EOF

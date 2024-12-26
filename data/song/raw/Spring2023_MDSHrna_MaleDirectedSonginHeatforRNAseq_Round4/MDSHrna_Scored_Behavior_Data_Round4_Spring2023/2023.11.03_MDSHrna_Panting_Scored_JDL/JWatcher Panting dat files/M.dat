@@ -1,0 +1,39 @@
+FirstLineOfData=25
+#-----------------------------------------------------------
+# Name: M.dat
+# Format: Focal Data File 1.0
+# Updated: Mon Oct 09 04:59:43 EDT 2023
+#-----------------------------------------------------------
+ 
+FocalMasterFile=/Applications/JWatcher/MDSH_panting_9.15.23.fmf
+ 
+# Observation started: Mon Oct 09 04:44:43 EDT 2023
+StartTime=1696841083512
+# Observation stopped: Mon Oct 09 04:59:43 EDT 2023
+StopTime=1696841983512
+ 
+Answer.1=M
+Answer.2=1515
+Answer.3=
+Answer.4=
+Answer.5=
+Answer.6=
+ 
+ 
+ 
+#BEGIN DATA
+628, o
+318834, l
+328150, p
+330402, l
+358199, o
+387525, l
+392845, o
+396496, l
+406412, p
+410413, l
+425030, o
+435309, l
+436693, p
+442225, o
+900000, EOF

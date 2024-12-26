@@ -1,0 +1,65 @@
+FirstLineOfData=25
+#-----------------------------------------------------------
+# Name: AA.dat
+# Format: Focal Data File 1.0
+# Updated: Sat Sep 23 15:42:27 EDT 2023
+#-----------------------------------------------------------
+ 
+FocalMasterFile=/Applications/JWatcher/MDSH_panting_9.15.23.fmf
+ 
+# Observation started: Sat Sep 23 15:26:40 EDT 2023
+StartTime=1695497200967
+# Observation stopped: Sat Sep 23 15:41:40 EDT 2023
+StopTime=1695498100967
+ 
+Answer.1=AA - date is 092323
+Answer.2=1520
+Answer.3=
+Answer.4=
+Answer.5=
+Answer.6=
+ 
+ 
+ 
+#BEGIN DATA
+826, l
+4642, o
+16971, l
+27303, p
+68550, l
+80716, p
+94386, o
+107071, p
+185610, o
+196932, p
+233291, l
+235090, p
+274919, o
+288105, p
+328904, l
+340333, p
+363219, o
+377651, p
+425963, l
+444342, p
+454057, o
+467728, p
+499127, l
+544484, o
+558100, l
+588748, p
+606481, l
+610566, p
+634747, o
+648118, p
+676947, l
+678477, p
+724656, o
+737369, p
+742608, l
+748525, p
+821431, l
+826606, p
+829868, o
+842869, p
+900000, EOF

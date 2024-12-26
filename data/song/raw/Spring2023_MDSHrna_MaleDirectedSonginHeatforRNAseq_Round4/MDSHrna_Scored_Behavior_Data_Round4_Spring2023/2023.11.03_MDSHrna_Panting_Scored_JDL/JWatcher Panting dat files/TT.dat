@@ -1,0 +1,68 @@
+FirstLineOfData=25
+#-----------------------------------------------------------
+# Name: TT.dat
+# Format: Focal Data File 1.0
+# Updated: Mon Oct 23 20:38:05 EDT 2023
+#-----------------------------------------------------------
+ 
+FocalMasterFile=/Applications/JWatcher/MDSH_panting_9.15.23.fmf
+ 
+# Observation started: Mon Oct 23 20:23:05 EDT 2023
+StartTime=1698106985568
+# Observation stopped: Mon Oct 23 20:38:05 EDT 2023
+StopTime=1698107885568
+ 
+Answer.1=TT
+Answer.2=1415
+Answer.3=
+Answer.4=
+Answer.5=
+Answer.6=
+ 
+ 
+ 
+#BEGIN DATA
+1322, p
+13098, l
+18449, p
+58210, l
+62094, o
+68325, p
+100124, l
+101356, p
+224162, l
+225555, p
+251196, l
+252930, p
+327929, o
+330231, p
+392777, l
+405417, p
+433773, l
+470281, p
+524320, l
+533136, p
+552505, l
+561363, p
+568470, l
+570132, p
+594424, l
+596310, p
+604397, l
+612048, p
+627029, o
+648447, p
+736477, o
+739303, p
+747812, o
+755754, p
+759436, o
+771961, p
+795023, o
+798270, p
+808056, o
+819868, p
+839381, o
+846946, p
+898531, l
+900000, EOF

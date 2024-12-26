@@ -1,0 +1,26 @@
+FirstLineOfData=25
+#-----------------------------------------------------------
+# Name: G.dat
+# Format: Focal Data File 1.0
+# Updated: Tue Oct 03 06:05:53 EDT 2023
+#-----------------------------------------------------------
+ 
+FocalMasterFile=/Applications/JWatcher/MDSH_panting_9.15.23.fmf
+ 
+# Observation started: Tue Oct 03 05:50:53 EDT 2023
+StartTime=1696326653857
+# Observation stopped: Tue Oct 03 06:05:53 EDT 2023
+StopTime=1696327553857
+ 
+Answer.1=G
+Answer.2=1525
+Answer.3=
+Answer.4=
+Answer.5=
+Answer.6=
+ 
+ 
+ 
+#BEGIN DATA
+715, o
+900000, EOF

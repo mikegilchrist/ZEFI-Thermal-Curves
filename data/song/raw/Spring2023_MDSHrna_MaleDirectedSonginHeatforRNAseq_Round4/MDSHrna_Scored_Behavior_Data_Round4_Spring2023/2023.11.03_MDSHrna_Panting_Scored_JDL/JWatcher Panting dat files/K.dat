@@ -1,0 +1,50 @@
+FirstLineOfData=25
+#-----------------------------------------------------------
+# Name: K.dat
+# Format: Focal Data File 1.0
+# Updated: Fri Oct 06 04:41:44 EDT 2023
+#-----------------------------------------------------------
+ 
+FocalMasterFile=/Applications/JWatcher/MDSH_panting_9.15.23.fmf
+ 
+# Observation started: Fri Oct 06 04:25:03 EDT 2023
+StartTime=1696580703748
+# Observation stopped: Fri Oct 06 04:40:03 EDT 2023
+StopTime=1696581603748
+ 
+Answer.1=K
+Answer.2=1345
+Answer.3=
+Answer.4=
+Answer.5=
+Answer.6=
+ 
+ 
+ 
+#BEGIN DATA
+296, p
+16464, l
+18313, p
+24146, l
+26910, p
+249408, l
+250631, p
+271395, l
+274976, p
+365140, l
+367946, p
+378687, l
+380912, p
+392675, l
+411360, p
+428586, l
+436492, p
+525036, l
+527586, p
+573730, l
+575823, p
+592391, l
+596677, p
+633233, l
+637802, p
+900000, EOF

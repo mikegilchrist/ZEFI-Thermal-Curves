@@ -1,0 +1,12 @@
+#-----------------------------------------------------------
+# Name: MDSH_panting_9.15.23.gdf
+# Format: Global Definition File 1.0
+# Updated: Fri Sep 15 15:46:48 GMT 2023
+#-----------------------------------------------------------
+Behavior.name.l=stop_panting
+Behavior.description.l=an open beak and the bird breathing with rapidity
+Behavior.name.o=out_of_sight
+Behavior.description.o=Not in-view of the camera or camera froze
+Behavior.name.p=panting
+Behavior.description.p=an open beak and the bird breathing with rapidity
+Supplementary=

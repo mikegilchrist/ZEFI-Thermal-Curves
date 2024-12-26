@@ -1,0 +1,22 @@
+#-----------------------------------------------------------
+# Name: MDSH_panting_9.15.23.fmf
+# Format: Focal Master File 1.0
+# Updated: Fri Sep 15 15:46:59 GMT 2023
+#-----------------------------------------------------------
+Behavior.name.l=stop panting
+Behavior.description.l=If beak is closed for longer than 3sec
+Behavior.name.o=out-of-sight
+Behavior.description.o=Not in-view of the camera or camera froze
+Behavior.name.p=panting
+Behavior.description.p=an open beak and the bird breathing with rapidity
+DurationMilliseconds=900000
+CountUp=false
+SoundOn=false
+Question.1=What is the Video File ID
+Question.2=What is the start time?
+Question.3=
+Question.4=
+Question.5=
+Question.6=
+Notes=
+Supplementary=

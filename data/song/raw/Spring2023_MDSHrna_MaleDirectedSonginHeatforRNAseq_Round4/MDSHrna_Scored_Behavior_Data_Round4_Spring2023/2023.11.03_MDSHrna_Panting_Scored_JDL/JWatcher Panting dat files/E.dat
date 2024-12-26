@@ -1,0 +1,57 @@
+FirstLineOfData=25
+#-----------------------------------------------------------
+# Name: E.dat
+# Format: Focal Data File 1.0
+# Updated: Tue Sep 26 03:40:56 EDT 2023
+#-----------------------------------------------------------
+ 
+FocalMasterFile=/Applications/JWatcher/MDSH_panting_9.15.23.fmf
+ 
+# Observation started: Tue Sep 26 03:25:56 EDT 2023
+StartTime=1695713156404
+# Observation stopped: Tue Sep 26 03:40:56 EDT 2023
+StopTime=1695714056404
+ 
+Answer.1=E
+Answer.2=1515
+Answer.3=
+Answer.4=
+Answer.5=
+Answer.6=
+ 
+ 
+ 
+#BEGIN DATA
+263, p
+75638, l
+89724, p
+93542, l
+97009, o
+101776, p
+174965, l
+183135, p
+189568, l
+195085, p
+205617, o
+211330, p
+309309, o
+312041, p
+412465, o
+418753, p
+518791, o
+523123, p
+562187, l
+565406, p
+596122, l
+603470, p
+615836, l
+624487, o
+627419, l
+635618, p
+657824, l
+664405, p
+685134, l
+744185, p
+766667, l
+883891, p
+900000, EOF

@@ -1,0 +1,61 @@
+FirstLineOfData=25
+#-----------------------------------------------------------
+# Name: QQ.dat
+# Format: Focal Data File 1.0
+# Updated: Tue Oct 24 23:03:22 EDT 2023
+#-----------------------------------------------------------
+ 
+FocalMasterFile=/Applications/JWatcher/MDSH_panting_9.15.23.fmf
+ 
+# Observation started: Tue Oct 24 22:48:22 EDT 2023
+StartTime=1698202102062
+# Observation stopped: Tue Oct 24 23:03:22 EDT 2023
+StopTime=1698203002062
+ 
+Answer.1=QQ
+Answer.2=1415
+Answer.3=
+Answer.4=
+Answer.5=
+Answer.6=
+ 
+ 
+ 
+#BEGIN DATA
+507, l
+35308, p
+37828, l
+41386, o
+57688, l
+108500, o
+109806, l
+131168, o
+146331, l
+221312, o
+240225, p
+241239, l
+282082, o
+284074, l
+311113, o
+326745, l
+401849, o
+417802, l
+421476, p
+423121, l
+434760, p
+436692, l
+492007, o
+505754, l
+565870, o
+568790, l
+582278, o
+595891, l
+672331, o
+686011, l
+763857, o
+775707, l
+852430, o
+865686, l
+883031, o
+884970, l
+900000, EOF

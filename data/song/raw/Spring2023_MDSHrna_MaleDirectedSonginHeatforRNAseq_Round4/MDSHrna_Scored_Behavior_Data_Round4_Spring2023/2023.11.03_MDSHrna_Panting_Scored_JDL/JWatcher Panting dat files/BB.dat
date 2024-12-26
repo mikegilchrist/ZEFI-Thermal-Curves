@@ -1,0 +1,52 @@
+FirstLineOfData=25
+#-----------------------------------------------------------
+# Name: BB.dat
+# Format: Focal Data File 1.0
+# Updated: Sat Sep 23 16:32:32 EDT 2023
+#-----------------------------------------------------------
+ 
+FocalMasterFile=/Applications/JWatcher/MDSH_panting_9.15.23.fmf
+ 
+# Observation started: Sat Sep 23 16:16:23 EDT 2023
+StartTime=1695500183585
+# Observation stopped: Sat Sep 23 16:31:23 EDT 2023
+StopTime=1695501083585
+ 
+Answer.1=BB
+Answer.2=1431
+Answer.3=
+Answer.4=
+Answer.5=
+Answer.6=
+ 
+ 
+ 
+#BEGIN DATA
+353, l
+29156, o
+41542, l
+117214, o
+131690, l
+178565, p
+186058, l
+207001, o
+222593, p
+233799, l
+237574, p
+277529, o
+283115, l
+298405, o
+310922, l
+388523, o
+401862, l
+482782, o
+491115, l
+569746, o
+581116, l
+660645, o
+671948, l
+748083, o
+761298, l
+840383, o
+851857, l
+900000, EOF

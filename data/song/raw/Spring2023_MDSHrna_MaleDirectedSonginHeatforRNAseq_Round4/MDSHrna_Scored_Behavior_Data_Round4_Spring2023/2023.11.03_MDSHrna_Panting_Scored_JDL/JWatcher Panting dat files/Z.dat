@@ -1,0 +1,58 @@
+FirstLineOfData=25
+#-----------------------------------------------------------
+# Name: Z.dat
+# Format: Focal Data File 1.0
+# Updated: Tue Oct 24 11:46:53 EDT 2023
+#-----------------------------------------------------------
+ 
+FocalMasterFile=/Applications/JWatcher/MDSH_panting_9.15.23.fmf
+ 
+# Observation started: Tue Oct 24 11:31:53 EDT 2023
+StartTime=1698161513598
+# Observation stopped: Tue Oct 24 11:46:53 EDT 2023
+StopTime=1698162413598
+ 
+Answer.1=Z
+Answer.2=1343
+Answer.3=
+Answer.4=
+Answer.5=
+Answer.6=
+ 
+ 
+ 
+#BEGIN DATA
+272, p
+5790, l
+14888, p
+17439, l
+19468, p
+65868, o
+77409, p
+80723, l
+88071, p
+111136, l
+169878, o
+185612, l
+273358, o
+290749, l
+377435, o
+401614, p
+440454, l
+444974, p
+448485, l
+450349, p
+482445, o
+499685, p
+591237, o
+602303, p
+629619, l
+631647, p
+695739, o
+709447, p
+795944, o
+817087, l
+820488, p
+851121, l
+853586, p
+900000, EOF
