@@ -135,7 +135,7 @@ T229,2/19/2022,T229_February_19_2022_47,55m 39s,55m 41s,2,Yes,There is a 3rd mot
 T229,2/19/2022,T229_February_19_2022_48,55m 48s,55m 52s,4,No,
 T229,2/19/2022,T229_February_19_2022_49,56m 1s,56m 3s,2,No,
 T229,2/19/2022,T229_February_19_2022_50,56m 4s,56m 6s,2,Yes,There is a 3rd motif after a .74 sec pause
-T229,2/18/2022,T229_February_19_2022_51,56m 11s,56m 16s,4,No,
+T229,2/19/2022,T229_February_19_2022_51,56m 11s,56m 16s,4,No,
 T229_misc_motifs,2/18/2022,NA,NA,NA,30,NA,
 T247,4/11/2022,T247_April_11_2022_1,30m 53s,31m 1s,9,Yes,There is a 10th motif  after a .97 sec pause
 T247,4/11/2022,T247_April_11_2022_2,31m 7s,31m 13s,7,No,
@@ -196,7 +196,7 @@ T257_misc_motifs,7/13/2022,NA,NA,NA,76,NA,
 T231,5/9/2022,T231_May_09_2022_1,34m 12s,34m 15s,2,Yes,There is a 3rd motif after a .66 sec pause
 T231,5/9/2022,T231_May_09_2022_2,34m 17s,34m 20s,4,No,
 T231,5/9/2022,T231_May_09_2022_3,34m 21s,34m 23s,3,No,
-T321,5/9/2022,T231_May_09_2022_4,34m 54s,34m 56s,3,Yes,There is a 4th motif after a .53 sec pause
+T231,5/9/2022,T231_May_09_2022_4,34m 54s,34m 56s,3,Yes,There is a 4th motif after a .53 sec pause
 T231,5/9/2022,T231_May_09_2022_5,41m 16s,41m 17s,2,Yes,There is a 3rd motif after a .56 sec pause
 T231,5/9/2022,T231_May_09_20226,41m 19s,41m 21s,2,No,
 T231,5/9/2022,T231_May_09_2022_7,55m 27s,55m 31s,5,No,
@@ -853,36 +853,36 @@ T236,6/14/2022,T236_June_14_2022_34,2h 27m 13s,2h 27m 18s,6,No,beep between motf
 T236,6/14/2022,T236_June_14_2022_35,2h 27m 18s,2h 27m 20s,2,No,beep between motfs
 T236,6/14/2022,T236_June_14_2022_36,2h 28m 47s,2h 28m 53s,9,No,beep between motfs
 T236_misc_motifs,6/14/2022,NA,NA,NA,7,NA,
-T244,6/24/2022,T244_June_25_2022_1,1h 59m 9s,1h 59m 20s,12,No,
-T244,6/24/2022,T244_June_25_2022_2,1h 59m 22s,1h 59m 24s,2,No,
-T244,6/24/2022,T244_June_25_2022_3,1h 59m 31s,1h 59m 33s,3,No,
-T244,6/24/2022,T244_June_25_2022_4,1h 59m 35s,1h 59m 37s,2,No,
-T244,6/24/2022,T244_June_25_2022_5,1h 59m 56s,2h 0m 0s,4,No,
-T244,6/24/2022,T244_June_25_2022_6,2h 0m 5s,2h 0m 9s,4,No,
-T244,6/24/2022,T244_June_25_2022_7,2h 1m 23s,2h 1m 26s,4,No,
-T244,6/24/2022,T244_June_25_2022_8,2h 3m 6s,2h 3m 8s,3,No,
-T244,6/24/2022,T244_June_25_2022_9,2h 4m 7s,2h 4m 15s,9,No,
-T244,6/24/2022,T244_June_25_2022_10,2h 4m 16s,2h 4m 19s,3,No,noisy end of song
-T244,6/24/2022,T244_June_25_2022_11,2h 4m 19s,2h 4m 21s,2,No,noisy
-T244,6/24/2022,T244_June_25_2022_12,2h 4m 22s,2h 4m 25s,3,No,
-T244,6/24/2022,T244_June_25_2022_13,2h 5m 22s,2h 5m 29s,8,No,
-T244,6/24/2022,T244_June_25_2022_14,2h 7m 15s,2h 7m 19s,4,No,questionable 4th motif
-T244,6/24/2022,T244_June_25_2022_15,2h 9m 44s,2h 9m 50s,7,No,noisy end of song
-T244,6/24/2022,T244_June_25_2022_16,2h 9m 50s,2h 9m 54s,4,No,noisy
-T244,6/24/2022,T244_June_25_2022_17,2h 10m 21s,2h 10m 26s,6,No,
-T244,6/24/2022,T244_June_25_2022_18,2h 12m 7s,2h 12m 9s,2,No,
-T244,6/24/2022,T244_June_25_2022_19,2h 12m 10s,2h 12m 12s,3,No,
-T244,6/24/2022,T244_June_25_2022_20,2h 14m 0s,2h 14m 3s,3,No,
-T244,6/24/2022,T244_June_25_2022_21,2h 15m 0s,2h 15m 4s,4,No,noisy end of song
-T244,6/24/2022,T244_June_25_2022_22,2h 15m 4s,2h 15m 6s,3,No,
-T244,6/24/2022,T244_June_25_2022_23,2h 15m 8s,2h 15m 11s,3,No,
-T244,6/24/2022,T244_June_25_2022_24,2h 17m 47s,2h 17m 51s,4,No,
-T244,6/24/2022,T244_June_25_2022_25,2h 19m 9s,2h 19m 12s,5,No,
-T244,6/24/2022,T244_June_25_2022_26,2h 20m 52s,2h 20m 57s,6,No,
-T244,6/24/2022,T244_June_25_2022_27,2h 24m 4s,2h 24m 7s,2,No,
-T244,6/24/2022,T244_June_25_2022_28,2h 24m 50s,2h 24m 53s,4,No,
-T244,6/24/2022,T244_June_25_2022_29,2h 26m 13s,2h 26m 16s,3,No,
-T244,6/24/2022,T244_June_25_2022_30,2h 27m 4s,2h 27m 10s,6,No,
+T244,6/25/2022,T244_June_25_2022_1,1h 59m 9s,1h 59m 20s,12,No,
+T244,6/25/2022,T244_June_25_2022_2,1h 59m 22s,1h 59m 24s,2,No,
+T244,6/25/2022,T244_June_25_2022_3,1h 59m 31s,1h 59m 33s,3,No,
+T244,6/25/2022,T244_June_25_2022_4,1h 59m 35s,1h 59m 37s,2,No,
+T244,6/25/2022,T244_June_25_2022_5,1h 59m 56s,2h 0m 0s,4,No,
+T244,6/25/2022,T244_June_25_2022_6,2h 0m 5s,2h 0m 9s,4,No,
+T244,6/25/2022,T244_June_25_2022_7,2h 1m 23s,2h 1m 26s,4,No,
+T244,6/25/2022,T244_June_25_2022_8,2h 3m 6s,2h 3m 8s,3,No,
+T244,6/25/2022,T244_June_25_2022_9,2h 4m 7s,2h 4m 15s,9,No,
+T244,6/25/2022,T244_June_25_2022_10,2h 4m 16s,2h 4m 19s,3,No,noisy end of song
+T244,6/25/2022,T244_June_25_2022_11,2h 4m 19s,2h 4m 21s,2,No,noisy
+T244,6/25/2022,T244_June_25_2022_12,2h 4m 22s,2h 4m 25s,3,No,
+T244,6/25/2022,T244_June_25_2022_13,2h 5m 22s,2h 5m 29s,8,No,
+T244,6/25/2022,T244_June_25_2022_14,2h 7m 15s,2h 7m 19s,4,No,questionable 4th motif
+T244,6/25/2022,T244_June_25_2022_15,2h 9m 44s,2h 9m 50s,7,No,noisy end of song
+T244,6/25/2022,T244_June_25_2022_16,2h 9m 50s,2h 9m 54s,4,No,noisy
+T244,6/25/2022,T244_June_25_2022_17,2h 10m 21s,2h 10m 26s,6,No,
+T244,6/25/2022,T244_June_25_2022_18,2h 12m 7s,2h 12m 9s,2,No,
+T244,6/25/2022,T244_June_25_2022_19,2h 12m 10s,2h 12m 12s,3,No,
+T244,6/25/2022,T244_June_25_2022_20,2h 14m 0s,2h 14m 3s,3,No,
+T244,6/25/2022,T244_June_25_2022_21,2h 15m 0s,2h 15m 4s,4,No,noisy end of song
+T244,6/25/2022,T244_June_25_2022_22,2h 15m 4s,2h 15m 6s,3,No,
+T244,6/25/2022,T244_June_25_2022_23,2h 15m 8s,2h 15m 11s,3,No,
+T244,6/25/2022,T244_June_25_2022_24,2h 17m 47s,2h 17m 51s,4,No,
+T244,6/25/2022,T244_June_25_2022_25,2h 19m 9s,2h 19m 12s,5,No,
+T244,6/25/2022,T244_June_25_2022_26,2h 20m 52s,2h 20m 57s,6,No,
+T244,6/25/2022,T244_June_25_2022_27,2h 24m 4s,2h 24m 7s,2,No,
+T244,6/25/2022,T244_June_25_2022_28,2h 24m 50s,2h 24m 53s,4,No,
+T244,6/25/2022,T244_June_25_2022_29,2h 26m 13s,2h 26m 16s,3,No,
+T244,6/25/2022,T244_June_25_2022_30,2h 27m 4s,2h 27m 10s,6,No,
 T244_misc_motifs,6/24/2022,NA,NA,NA,2,NA,
 T235,2/21/2022,T235_February_21_2022_1,30m 51s,30m 56s,5,No,
 T235,2/21/2022,T235_February_21_2022_2,30m 58s,31m 1s,4,Yes,There is a 5th motif after a >1 sec pause
@@ -1521,7 +1521,7 @@ T236,4/16/2022,T236_April_16_2022_34,57m 3s,57m 8s,6,Yes,"There are 3 additional
 T236,4/16/2022,T236_April_16_2022_35,57m 12s,57m 13s,2,Yes,There is a 3rd motif after a >1 sec pause
 T236_misc_motifs,4/16/2022,NA,NA,NA,25,NA,
 T258,7/12/2022,T258_July_12_2022_1,2h 7m 22s,2h 7m 25s,2,Yes,There is a 3rd motif after a >1 sec pause
-T258,7/12/2011,T258_July_12_2022_2,2h 8m 43s,2h 8m 46s,2,No,
+T258,7/12/2022,T258_July_12_2022_2,2h 8m 43s,2h 8m 46s,2,No,
 T258,7/12/2022,T258_July_12_2022_3,2h 8m 46s,2h 8m 48s,2,No,
 T258,7/12/2022,T258_July_12_2022_4,2h 14m 47s,2h 14m 50s,3,Yes,There is a 4th motif after a .6 sec pause
 T258,7/12/2022,T258_July_12_2022_5,2h 15m 20s,2h 15m 22s,2,Yes,There are 2 additional motifs after a .68 sec pause
@@ -2254,7 +2254,7 @@ T247,2/1/2022,T247_February_01_2022_43,52m 8s,52m 9s,2,No,
 T247,2/1/2022,T247_February_01_2022_44,52m 10s,52m 12s,2,No,
 T247,2/1/2022,T247_February_01_2022_45,54m 16s,54m 17s,2,Yes,There is a 3rd motif after a >1 sec pause
 T247,2/1/2022,T247_February_01_2022_46,55m 41s,55m 43s,2,No,
-T247,2/1/2011,T247_February_01_2022_47,55m 43s,55m 45s,2,No,
+T247,2/1/2022,T247_February_01_2022_47,55m 43s,55m 45s,2,No,
 T247,2/1/2022,T247_February_01_2022_48,55m 45s,55m 47s,2,No,
 T247,2/1/2022,T247_February_01_2022_49,55m 48s,55m 50s,3,Yes,There are 2 additional motifs after a .67 sec pause
 T247,2/1/2022,T247_February_01_2022_50,58m 9s,58m 11s,2,Yes,There is a 3rd motif after a .6 sec pause
@@ -3114,7 +3114,7 @@ T235,5/5/2022,T235_May_05_2022_6,55m 3s,55m 8s,5,No,questionable 5th motif
 T235,5/5/2022,T235_May_05_2022_7,55m 8s,55m 11s,3,No,
 T235,5/5/2022,T235_May_05_2022_8,55m 24s,55m 29s,6,No,
 T235,5/5/2022,T235_May_05_2022_9,55m 42s,55m 47s,6,No,
-T235,5/2/2022,T235_May_05_2022_10,56m 27s,56m 33s,5,No,
+T235,5/5/2022,T235_May_05_2022_10,56m 27s,56m 33s,5,No,
 T235,5/5/2022,T235_May_05_2022_11,56m 44s,56m 50s,6,Yes,There are 2 additional motifs after a .64 sec pause
 T235,5/5/2022,T235_May_05_2022_12,57m 15s,57m 20s,6,No,
 T235,5/5/2022,T235_May_05_2022_13,57m 21s,57m 22s,2,Yes,There is a 3rd motif after a >1 sec pause
