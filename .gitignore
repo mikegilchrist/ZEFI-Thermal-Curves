@@ -4,6 +4,7 @@
 *.Rdata
 .Ruserdata
 *-2x1.pdf
+tmp*
 tmp*.pdf
 *.rds
 *.html

@@ -1,0 +1,27 @@
+---
+title: "Process motif_count data"
+author: "Michael Gilchrist"
+date: "date: 2022-12-15"
+output: pdf_document
+---
+
+
+## Match `song_by_motif` to `motif_data_full`
+
+- match by male and date
+
+
+```{r}
+load(file.path("output", "data.processing_2023-04-05.Rda"), verbose = TRUE)
+
+## Avoid ambiguity and poor terminology in previous work
+## at the song level
+# song_data_full <- motif_data_full |>
+#  rename_with( ~str_replace( .x, "motif", "song"))  |>
+#  rename_with( ~str_replace(.x, "^count", "song_count"))
+
+
+```
+
+
+
