@@ -1,0 +1,66 @@
+---
+title: "Merge fixed motif data into previous motif_count data"
+author: "Michael Gilchrist"
+date: "date: 2025-03-03"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  warning = TRUE, # show warnings
+  message = TRUE, # show messages
+  error = TRUE, # do not interrupt generation in case of errors,
+  echo = TRUE#,  # show R code
+  ##results="asis" # Hopefully print summary() in for loops
+  )
+
+
+```
+# Goal
+
+- Merge updated motif data into pre-existing dataset.
+
+
+# Set up
+
+## Load libraries
+
+```{r}
+
+
+## load libraries
+library(stats)
+require(MASS) # provides negative binomial fitting:  glm.nb
+library(tidyverse)
+
+```
+## Local Functions
+
+```{r}
+
+```
+
+
+## Load Data
+
+```{r}
+
+git_root <- system("git rev-parse --show-toplevel", intern=TRUE)
+output_dir <- "output"
+data_flawed <- read.csv(file.path(git_root, "data", "song", "motifs", "song.by.motif.data_2024-12-27.csv"))
+data_fixes <- read.csv(file.path(git_root, "data", "song", "motifs", "Tara.Empsome_2025-02-16_fixed.motif.data.csv"))
+
+clipped_file_name_fix <- data_fixes$Clipped.File.Name
+
+data_flawed |>
+    filter( !(Clipped.File.Name %in% clipped_file_name_fix)) -> data_tmp
+
+data <- bind_rows(data_fixes, data_tmp)
+
+write_csv(data, file = file.path(git_root, "data", "song", "motifs", "song.by.motif.data_2025-03-03.csv"),
+          quote="needed"
+)
+
+```
+	

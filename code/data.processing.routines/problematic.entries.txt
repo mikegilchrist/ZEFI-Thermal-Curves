@@ -1,0 +1,7 @@
+# 2025-02-03
+
+- In processing the data I have fixed many typos and minor errors.
+- These errors I need to have resolved by Tara or someone else.
+  - Song length seems too long
+    >  male  date       file        start.song motifs post.song.motif notes length.song trial song.index
+    > T229  2022-05-05 T229_May_0…       1966      4 TRUE            "The…         544     1          3

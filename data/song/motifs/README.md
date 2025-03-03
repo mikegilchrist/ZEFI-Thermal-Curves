@@ -9,3 +9,13 @@
   - Fix typos in male ID
   - Fix errors in date column
     - `$ sed -i 's|T244,6/24/2022|T244,6/25/2022|' song.by.motif.data.csv 
+
+# 2025-02-04
+
+- Found ~ 30 entries where the time start and stop differences seemed erroneously long.
+- Sent file with those values to Tara
+# 2025-02-16
+
+- Got revised values for 30 outlined only.
+- Need to integerated it back into the current dataframe.
+

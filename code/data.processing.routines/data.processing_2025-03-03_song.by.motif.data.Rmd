@@ -1,0 +1,206 @@
+---
+title: "Process motif_count data"
+author: "Michael Gilchrist"
+date: "date: 2024-10-21"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  warning = TRUE, # show warnings
+  message = TRUE, # show messages
+  error = TRUE, # do not interrupt generation in case of errors,
+  echo = TRUE#,  # show R code
+  ##results="asis" # Hopefully print summary() in for loops
+  )
+
+
+```
+# Goal
+
+- Add motif counts within songs and other information into current data structures
+- Uses updated data from 2025-03-03
+
+# Set up
+
+## Load libraries
+
+```{r}
+
+
+## load libraries
+library(stats)
+require(MASS) # provides negative binomial fitting:  glm.nb
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(grid) ## provides textGrob
+library(gridExtra)
+library(viridisLite)
+
+#options(ggplot2.continuous.colour="viridis",
+#        ggplot2.discrete.colour="viridis",
+#        ggplot2.scale_fill_discrete = scale_fill_viridis_d,
+#        ggplot2.scale_fill_continuous = scale_fill_viridis_c)
+
+library(GGally)
+#library(reshape2)
+#library(lme4)
+#library(nlme)
+#library(gnm)
+library(rsample) ## provides bootstraps()
+
+#library(RVAideMemoire) # provides overdisp.glmer()
+#library(humidity) ## provides VPD
+#library(weathermetrics)
+library(latex2exp)
+
+```
+## Local Functions
+
+```{r}
+
+kprint <- function(input, ...) {
+    print(knitr::kable(input, ...))
+cat('\n\n<!-- -->\n\n')
+}
+
+
+stringToSeconds <- Vectorize(
+  function(string) {
+  tmp <- str_replace(string,  "h *", " * 3600 + ") |>
+    str_replace("m *", " * 60 + ") |>
+    str_replace("s *", "")
+  eval(parse(text=tmp))
+}
+)
+
+```
+
+## Plotting settings
+
+```{r}
+
+## From: https://data-se.netlify.app/2018/12/12/changing-the-default-color-scheme-in-ggplot2/
+
+theme_set(theme_minimal(base_size = 9))
+theme_update(
+    plot.title = element_text(size = rel(1.1)),
+    plot.subtitle = element_text(size = rel(1)))
+
+if(!exists("old_opts")) old_opts <- options()  # save old options
+
+options(ggplot2.continuous.colour="viridis")
+options(ggplot2.continuous.fill = "viridis")
+options(ggplot2.discrete.colour="viridis")
+options(ggplot2.discrete.fill = "viridis")
+
+
+```
+
+## Load Data
+
+```{r}
+
+git_root <- system("git rev-parse --show-toplevel", intern=TRUE)
+output_dir <- "output"
+data_new <- read.csv(file.path(git_root, "data", "song", "motifs", "song.by.motif.data_2024-12-27.csv"))
+```
+
+## Process New Detailed Song Data
+
+```{r}
+
+detailed_motif_data <- data_new  |>
+  rename(male = Male,
+         date = Date,
+         file = Clipped.File.Name,
+         start.song = Timestamp.Start,
+         end.song = Timestamp.End,
+         motifs = Number.of.Motifs,
+         post.song.motif = Any.motifs.after..5.gap,
+         notes = Other.notes) |>
+  mutate(date = lubridate::mdy(date),
+         start.song = stringToSeconds(start.song),
+         end.song = stringToSeconds(end.song),
+         post.song.motif = str_detect(post.song.motif, " *(Y|y)es *"),
+         length.song = end.song - start.song,
+         male = str_replace(male, "_misc_motifs", "") ## filter later
+         ) |>
+  select(!end.song)  ## now redundant with info in length.song
+
+## Check if there are any disagreements between date and file columns
+try(
+  if(
+  detailed_motif_data |>
+    mutate(
+        date_file = str_replace(file, "T[0-9]+_([^_]+)_([^_]+)_([^_]+)_[0-9]+", "\\3-\\1-\\2")
+    ) |>
+#  rowwise() |> 
+    mutate(date_file = if_else(is.na(date_file), as.Date(NA), lubridate::ymd(date_file))
+    ) |>  filter(date != date_file) |>
+  select(male, file, date_file, date) |>
+    nrow() != 0) stop("Dates in file and date columns don't match!")
+)
+```
+
+```{r}
+
+## Extract motif data assigned to songs
+## Add trial and song index columns
+song_motif_data <- detailed_motif_data |>
+  filter(!(is.na(file))) |>
+  group_by(male, date) |>
+  mutate(trial = min_rank(date)) |>  # assign trial index for a given male
+  mutate(song.index = row_number()) |>
+  ungroup()
+ 
+## Summarize song and within song motif data
+song_motif_summary <- song_motif_data |>
+  group_by(male, date) |>
+  summarize(song.count = max(song.index),
+            motif.sum = sum(motifs),
+            motif.sd = sd(motifs),
+            motif.mean = mean(motifs),
+            length.song.sum = sum(length.song),
+            length.song.sd = sd(length.song),
+            motif.mean.length = length.song.sum/motif.sum,
+            motif.sd.length = sd(length.song/motifs),
+            post.song.sum = sum(post.song.motif),
+            post.song.freq = post.song.sum/motif.sum
+            )
+
+
+#  mutate(index.song = str_extract(file, ".*_([0-9][0-9]?)$") #song index within a trial         
+         #) 
+
+nonsong_motif_data <- detailed_motif_data |>
+  filter((is.na(file)))
+
+```
+
+```{r}
+
+if(interactive()) {
+    file_name <- "testing.II.Rda"
+} else {
+    file_name <- knitr::current_input() %>% sub("\\.Rmd", ".Rda", .)
+}
+
+
+comment <- paste0("Data created using file data_processing_2024-12-26.Rmd on ", date()) 
+
+save_obj <- c("detailed_motif_data", "song_motif_data", "song_motif_summary", "nonsong_motif_data")
+
+
+## Add comments
+## Note usage of eval and parse!!
+for(x in save_obj) {
+    my_exp <- paste0("comment(", x, ") <- \"", comment, "\"")
+    parse(text = my_exp)
+}
+
+save(list = save_obj, file = paste0(file.path("output", file_name)) )
+
+```
