@@ -1,4 +1,4 @@
-male,chamber,date,motif_count,counter,test_order,temp_target,temp_mean,temp_median,humdity_mean
+male,chamber,date,motif_count,counter,test_order,temp_target,temp_mean,temp_median,humidity_mean
 T229,6,02/13/22,0,KIM,1,44,45.84946,46,9.263441
 T229,6,02/15/22,24,KIM,2,42,42.28226,42.5,9.849462
 T229,6,02/17/22,114,KIM,3,40,40.65323,40.5,18.33065
