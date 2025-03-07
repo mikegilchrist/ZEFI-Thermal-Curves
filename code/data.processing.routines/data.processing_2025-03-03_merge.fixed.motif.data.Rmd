@@ -58,7 +58,7 @@ data_flawed |>
 
 data <- bind_rows(data_fixes, data_tmp)
 
-write_csv(data, file = file.path(git_root, "data", "song", "motifs", "song.by.motif.data_2025-03-03.csv"),
+write_csv(data, file = file.path(git_root, "data", "song", "motifs", "motif.data_2025-03-03.csv"),
           quote="needed"
 )
 

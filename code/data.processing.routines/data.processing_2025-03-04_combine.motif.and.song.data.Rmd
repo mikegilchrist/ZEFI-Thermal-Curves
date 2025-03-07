@@ -1,0 +1,45 @@
+---
+title: "Combine song and motif data"
+author: "Michael Gilchrist"
+date: "date: 2025-03-04"
+output: pdf_document
+---
+
+# Goal
+
+- Combine earlier dataset on songs with newer dataset that includes both song and motif data.
+- The original song data has lots of additional variables associated with it, such as chamber temperature, etc.
+
+
+## Match `so` to `motif_data_full`
+
+- match by male and date
+```{r}
+library(tidyverse)
+
+```
+
+```{r}
+load(file.path("output", "data.processing_2025-03-03_motif.data.Rda"), verbose = TRUE)
+load(file.path("output", "data.processing_2025-03-04_process.original.song.data.Rda"), verbose = TRUE)
+
+## Avoid ambiguity and poor terminology in previous work
+## at the song level
+# song_data_full <- motif_data_full |>
+#  rename_with( ~str_replace( .x, "motif", "song"))  |>
+#  rename_with( ~str_replace(.x, "^count", "song_count"))
+trial_info <- song_data_full[ , c("male", "date", "trial_round", "temp_target", "temp_mean", "humidity_mean", "vpd", "chamber", "counter", "test_order", "mass")]
+
+## Add trial information to motif data
+motif_trial_data <- left_join(motif_data, trial_info, by = c("male", "date"))
+
+## Add motif stats to song_data
+
+song_motif_stats_data <- left_join(song_data_full, motif_summary, by = c("male", "date"))
+
+```
+
+
+```{r}
+
+```

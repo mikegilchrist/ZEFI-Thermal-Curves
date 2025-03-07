@@ -1,7 +1,7 @@
 ---
 title: "Process motif_count data"
 author: "Michael Gilchrist"
-date: "date: 2024-10-21"
+date: "date: 2025-03-03"
 output: pdf_document
 ---
 
@@ -105,7 +105,7 @@ options(ggplot2.discrete.fill = "viridis")
 
 git_root <- system("git rev-parse --show-toplevel", intern=TRUE)
 output_dir <- "output"
-data_new <- read.csv(file.path(git_root, "data", "song", "motifs", "song.by.motif.data_2024-12-27.csv"))
+data_new <- read.csv(file.path(git_root, "data", "song", "motifs", "motif.data_2025-03-03.csv"))
 ```
 
 ## Process New Detailed Song Data
@@ -116,19 +116,20 @@ detailed_motif_data <- data_new  |>
   rename(male = Male,
          date = Date,
          file = Clipped.File.Name,
-         start.song = Timestamp.Start,
-         end.song = Timestamp.End,
+         start_song = Timestamp.Start,
+         end_song = Timestamp.End,
          motifs = Number.of.Motifs,
-         post.song.motif = Any.motifs.after..5.gap,
+         post_song_motif = Any.motifs.after..5.gap,
          notes = Other.notes) |>
   mutate(date = lubridate::mdy(date),
-         start.song = stringToSeconds(start.song),
-         end.song = stringToSeconds(end.song),
-         post.song.motif = str_detect(post.song.motif, " *(Y|y)es *"),
-         length.song = end.song - start.song,
+         start_song = stringToSeconds(start_song),
+         end_song = stringToSeconds(end_song),
+         post_song_motif = str_detect(post_song_motif, " *(Y|y)es *"),
+         length_song = end_song - start_song,
          male = str_replace(male, "_misc_motifs", "") ## filter later
          ) |>
-  select(!end.song)  ## now redundant with info in length.song
+    arrange(male, date, start_song) %>%
+    select(!end_song)  ## now redundant with info in length_song
 
 ## Check if there are any disagreements between date and file columns
 try(
@@ -149,26 +150,26 @@ try(
 
 ## Extract motif data assigned to songs
 ## Add trial and song index columns
-song_motif_data <- detailed_motif_data |>
+motif_data <- detailed_motif_data |>
   filter(!(is.na(file))) |>
-  group_by(male, date) |>
-  mutate(trial = min_rank(date)) |>  # assign trial index for a given male
-  mutate(song.index = row_number()) |>
+  group_by(male) |>
+#  mutate(trial = min_rank(date)) |>  # This doesn't work as expected because the same dates across songs are not merged
+  mutate(song_index = row_number()) |>
   ungroup()
  
 ## Summarize song and within song motif data
-song_motif_summary <- song_motif_data |>
+motif_summary <- motif_data |>
   group_by(male, date) |>
-  summarize(song.count = max(song.index),
-            motif.sum = sum(motifs),
-            motif.sd = sd(motifs),
-            motif.mean = mean(motifs),
-            length.song.sum = sum(length.song),
-            length.song.sd = sd(length.song),
-            motif.mean.length = length.song.sum/motif.sum,
-            motif.sd.length = sd(length.song/motifs),
-            post.song.sum = sum(post.song.motif),
-            post.song.freq = post.song.sum/motif.sum
+  summarize(song_count = max(song_index),
+            motif_sum = sum(motifs),
+            motif_sd = sd(motifs),
+            motif_mean = mean(motifs),
+            length_song_sum = sum(length_song),
+            length_song_sd = sd(length_song),
+            motif_mean_length = length_song_sum/motif_sum,
+            motif_sd_length = sd(length_song/motifs),
+            post_song_sum = sum(post_song_motif),
+            post_song_freq = post_song_sum/motif_sum
             )
 
 
@@ -189,9 +190,9 @@ if(interactive()) {
 }
 
 
-comment <- paste0("Data created using file data_processing_2024-12-26.Rmd on ", date()) 
+comment <- paste0("Data created using file data_processing_2025-03-03.Rmd on ", date()) 
 
-save_obj <- c("detailed_motif_data", "song_motif_data", "song_motif_summary", "nonsong_motif_data")
+save_obj <- c("motif_data", "motif_summary", "nonsong_motif_data")
 
 
 ## Add comments

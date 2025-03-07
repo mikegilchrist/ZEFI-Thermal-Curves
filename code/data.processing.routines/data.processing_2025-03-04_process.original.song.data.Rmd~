@@ -1,0 +1,310 @@
+---
+title: "Process motif_count data"
+author: "Michael Gilchrist"
+date: "date: 2025-03-04"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = TRUE, # show warnings
+  message = TRUE, # show messages
+  error = TRUE, # do not interrupt generation in case of errors,
+  echo = TRUE#,  # show R code
+  ##results="asis" # Hopefully print summary() in for loops
+  )
+
+
+if(interactive()) {
+    default::default(.ess.eval) <- list(max.deparse.length=1E5, output = TRUE)
+} else {
+}
+
+
+```
+# Goal
+
+- Directly copied from data.processing_2023-04-05.Rmd
+- Main change: Substitute 'motif' for 'song' given it is more accurate.
+
+
+# Set up
+
+## Load libraries
+
+```{r}
+
+
+## load libraries
+library(stats)
+require(MASS) # provides negative binomial fitting:  glm.nb
+library(RSQLite)  # Don't think we need this.
+library(rTPC)  ## 
+library(nls.multstart)
+library(broom)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(grid) ## provides textGrob
+library(gridExtra)
+library(viridisLite)
+
+#options(ggplot2.continuous.colour="viridis",
+#        ggplot2.discrete.colour="viridis",
+#        ggplot2.scale_fill_discrete = scale_fill_viridis_d,
+#        ggplot2.scale_fill_continuous = scale_fill_viridis_c)
+
+library(GGally)
+library(reshape2)
+library(lme4)
+library(nlme)
+library(gnm)
+library(rsample) ## provides bootstraps()
+
+library(RVAideMemoire) # provides overdisp.glmer()
+library(humidity) ## provides VPD
+library(weathermetrics)
+library(latex2exp)
+
+```
+## Local Functions
+
+```{r}
+
+kprint <- function(input, ...) {
+    print(knitr::kable(input, ...))
+cat('\n\n<!-- -->\n\n')
+}
+
+
+if(interactive()) {
+    file_name <- "testing.Rda"
+} else {
+    file_name <- knitr::current_input() %>% sub("\\.Rmd", ".Rda", .)
+}
+
+```
+
+## Plotting settings
+
+```{r}
+
+## From: https://data-se.netlify.app/2018/12/12/changing-the-default-color-scheme-in-ggplot2/
+
+theme_set(theme_minimal(base_size = 9))
+theme_update(
+    plot.title = element_text(size = rel(1.1)),
+    plot.subtitle = element_text(size = rel(1)))
+
+if(!exists("old_opts")) old_opts <- options()  # save old options
+
+options(ggplot2.continuous.colour="viridis")
+options(ggplot2.continuous.fill = "viridis")
+options(ggplot2.discrete.colour="viridis")
+options(ggplot2.discrete.fill = "viridis")
+
+
+```
+
+## Load Data
+
+```{r}
+
+## Read in ZEFI Data sets
+## Treat 'repeatability' as round = 0
+## Add round info
+
+## Repeatability was done between round 1 and 2, female was present, but only one temp. so treating as `round = 2` and redefining `round = 2` as `round = 3`
+
+output_dir <- "output"
+
+if(!dir.exists(output_dir)) dir.create(output_dir)
+git_root <- system("git rev-parse --show-toplevel", intern = TRUE)
+
+song_data_raw = list()
+
+song_data_raw[[1]] <- read.csv(file.path(git_root, "data", "collated", "HSPi-Round-1-Heat-Trials.csv")) %>% mutate(round = 1) %>%
+    ## Note T237 and T230 are missing numbers in the song_count column
+    ## so we are filtering these observations out until they are found
+    ## Removing filter
+    ##filter(!is.na(song_count))
+    identity()
+
+song_data_raw[[2]] <- read.csv(file.path(git_root, "data", "collated", "HSPi-Repeatability-Song-Count.csv")) %>%
+    mutate(round = 2) %>%
+    ungroup()
+
+song_data_raw[[3]] <-read.csv(file.path(git_root, "data", "collated", "HSPi-Round-2-Heat-Trials.csv")) %>%
+    mutate(round = 3) %>%
+    ## Deal with missing temp_mean and humidity_mean values
+    ## in round == 3
+    ## 2022/10/19 - code no longer needed
+    ## group_by(temp_target) %>% 
+    ##mutate(temp = if_else((round == 3 & is.na(temp_mean)),
+    ##                      mean(temp_mean, na.rm = TRUE),
+    ##                      temp_mean)) %>%
+    ##mutate(humidity = if_else((round == 3 & is.na(humidity_mean)),
+    ##                          mean(humidity_mean, na.rm = TRUE),
+    ##                          humidity_mean)) %>%
+    ungroup() 
+
+
+## Join data and discard empty columns
+song_data_full <- full_join(song_data_raw[[1]], song_data_raw[[2]]) %>%
+    full_join(song_data_raw[[3]]) %>%
+    rename(song_count = motif_count,
+           song_rate = motif_rate) %>%
+    discard(~all(is.na(.) | . =="")) %>% ## get rid of columns of only NA
+    mutate(n_obs_completed = !(is.na(song_count)) ) %>%
+    mutate(song_count = ifelse(is.na(song_count), 0, song_count)) %>%
+#    mutate(song_count = song_count*1.0) %>% ## convert to a double so it's not treated as an integer
+    mutate(chamber = as.factor(chamber), male = as.factor(male)) %>%
+    ## create a male specific round and global trial index `trial`
+    group_by(male, round) %>%
+    mutate(trial_round = rank(date)) %>%
+    ungroup() %>%
+    mutate(song_count_plus_1 = as.integer((song_count + 1))) %>%
+    mutate(log_song_count_plus_1 = log(song_count + 1)) %>%
+    mutate(temp_target = as.numeric(temp_target)) %>%
+    ## Create generic 'temp' column which is either
+    ## temp_mean, if it exists, or temp_target, if it doesn't
+    mutate(temp = if_else(is.na(temp_mean),
+                          temp_target,
+                          temp_mean)) %>%
+    ## Add column with total song_count for a given round
+    group_by(male, round) %>%
+    mutate(count_total_round = sum(song_count),
+           n_obs_round = length(song_count),
+           count_mean_round = count_total_round/n_obs_round,
+           count_sd_round = sd(song_count),
+           count_cv_round = count_sd_round/count_mean_round) %>%
+    ungroup() %>%
+    group_by(male) %>%
+    mutate(count_total = sum(song_count),
+           n_obs = length(song_count),
+           count_mean = count_total/n_obs) %>% 
+    mutate(trial = as.integer(rank(date))) %>%
+    mutate(song_prop_round = song_count/count_total_round) %>%
+    mutate(song_prop = song_count/count_total) %>%
+    ungroup(male) %>% 
+    ## assuming poisson error
+    ## From glm man page
+    ## > Non-‘NULL’ ‘weights’ can be used to indicate that different
+    ## >  observations have different dispersions (with the values in
+    ## >  ‘weights’ being inversely proportional to the dispersions);
+    ## From: https://www.r-bloggers.com/2014/01/ill-take-my-nls-with-weights-please/
+    ## > Minimum-variance estimation of the adjustable parameters in linear and non-linear
+    ## > least squares requires that the data be weighted inversely as their variances
+    ## > $w_i \propto \sigma^{-2}$.
+    ## Note from: https://www.r-bloggers.com/2012/07/a-weighting-function-for-nls-nlslm/
+    ## >  wfct() returns a vector of weights that are calculated from a user-defined expression and transfers this vector within nls.
+    ##  - one option is 1/fitted, which seems ideal.
+    ##
+    ## For now set weights = 1/(song_count + 1)
+    ## - add +1 to deal with 0's
+    mutate(weights = 1/(song_count + 1)) %>%
+    ## need to rescale wts for song_prop data
+    ##mutate(weight_prop = weight_count * count_total_round) %>% 
+    ## Add vpd 
+  mutate(svp = SVP(t = temp_mean + 273.15, isK = TRUE),
+           vpd = svp*(1-humidity_mean/100) ) %>%
+  rename(bill_date = date_morph_data_collected) %>% 
+  mutate(vpd_offset = vpd - mean(vpd)) %>%
+  ungroup() %>%
+  relocate(round, trial_round, song_count, song_prop, temp_mean, humidity_mean, .after = male) %>%
+  mutate() #song_count = as_integer(song_count),
+         #) ## Dummy function so we can comment out lines above it w/o any issues
+
+
+
+## Extract information on each male's bill
+bird_bill_data <- song_data_full %>%
+    select(male, bill_depth, bill_length, bill_width, bill_date)
+
+
+song_stats <- song_data_full %>%
+    select(male, round, n_obs, starts_with("count_")) %>%
+    unique()
+names(song_stats) <- names(song_stats) %>% sub("^count_", "", .)
+
+## Remove columns on male bills
+song_data <- song_data_full %>%
+    select( -starts_with("bill_")) %>%
+    select( -starts_with(c("count_")))
+## Create small subset of data.
+
+song_data_40C  <- song_data %>%
+    filter(temp_target == 40) %>%
+    unique()
+
+dim(song_data_40C)
+
+## Get stats for subset
+## Original approach
+song_stats_40C <- song_data_40C %>%
+    group_by(male) %>%
+    summarize(n_obs = length(song_count),
+              mean = mean(song_count),
+              var = var(song_count, na.rm = TRUE),
+              cv = sqrt(var)/mean,
+              dispersion = var/mean) %>%
+    replace(is.na(.), 0)
+
+
+print("We have 15 males, 5 of which we only have 1 observation at 40C")
+song_stats_40C
+
+comment <- paste0("Data created using file ", file_name, " on ", date()) 
+
+save_obj <- c("song_data_full", "song_data", "song_data_40C", "song_stats", "song_stats_40C", "bird_bill_data")
+
+
+## Add comments
+## Note usage of eval and parse!!
+for(x in save_obj) {
+    my_exp <- paste0("comment(", x, ") <- \"", comment, "\"")
+                                        #eval(parse(text = my_exp))
+    parse(text = my_exp)
+}
+
+save(list = save_obj, file = paste0(file.path("output", file_name)) )
+     
+```
+
+
+## Plot song_count
+
+
+```{r}
+
+g1 <- ggplot(data = song_data) +
+    aes(x = temp, y = song_count, color = male) +
+    geom_point() +
+    labs(title = "Males unfiltered") +
+    theme(legend.position="bottom")
+
+males_filtered_disp <- song_stats_40C %>% filter(dispersion < 50) %>% pull(male)
+
+data_filtered <- song_data %>% filter(male %in% males_filtered_disp)
+
+g2 <- ggplot(data = data_filtered) +
+    aes(x = temp, y = song_count, color = male) +
+    geom_point() +
+    labs(title = "Males filtered for dispersion < 50 at 40C") +
+    theme(legend.position="bottom")
+
+males_filtered_mean <- song_stats %>% filter(mean > 10) %>% pull(male)
+males_filtered <- intersect(males_filtered_mean, males_filtered_disp)
+data_filtered <- song_data %>% filter(male %in% males_filtered)
+
+g3 <- ggplot(data = data_filtered) +
+    aes(x = temp, y = song_count, color = male) +
+    geom_point() +
+    labs(title = "Males filtered for dispersion < 50 at 40C & count_mean > 10)") +
+    theme(legend.position="bottom")
+
+
+grid.arrange(g1, g2, g3, ncol = 2)
+
+
+``` 
