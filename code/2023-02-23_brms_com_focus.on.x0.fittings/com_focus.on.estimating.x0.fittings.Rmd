@@ -1,0 +1,324 @@
+---
+title: "Piecewise Regression with COM_Poisson Error"
+author: "Michael Gilchrist"
+date: "Created: 2023-02-23; Code run on `r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, }
+
+## Global options
+options(digits = 3)
+
+### Knitr specific
+knitr::opts_chunk$set(
+                      warning = TRUE, # show warnings
+                      message = FALSE, # show messages
+                      error = TRUE, # do not interrupt generation in case of errors,
+                      echo = TRUE,  # show R code
+                      fig.width = 8,
+                      fig.path = "Figures/"
+                  )
+
+options("warn" = 1) ## print warnings when they occur
+
+if(interactive()) default::default(.ess.eval) <- list(max.deparse.length=5E1, output = TRUE)
+
+```
+# Goal
+
+- Fit two piece COM_poisson to real data using `brms` where the goal is to extract as much info on `x0` as possible.
+- Code  derived from
+  - `../2023-02-07_brms_two.piece_focus.on.x0.fittings/focus.on.estimating.x0.fittings.Rmd`
+  - 
+
+## Recap
+
+
+# Set up
+
+## Install libraries
+
+```{r, message = FALSE}
+
+# install packages user might not have by replacing FALSE with TRUE
+
+## load libraries
+library(stats)
+library(MASS) # provides negative binomial fitting:  glm.nb
+library(ggplot2)
+library(ggpubr)
+library(grid)
+library(gridExtra)
+library(GGally)
+library(broom)
+library(tidyverse)
+library(viridisLite)
+library(cmdstanr)
+library(rstan)
+options(mc.cores = 4) #(parallel::detectCores()-2))
+rstan_options(auto_write = TRUE)
+library(brms)
+library(loo)
+library(shinystan)
+
+
+## options(ggplot2.continuous.colour="viridis",
+##        ggplot2.discrete.colour="viridis",
+##        ggplot2.scale_fill_discrete = scale_fill_viridis_d,
+##        ggplot2.scale_fill_continuous = scale_fill_viridis_c)
+
+```
+
+## Load Data
+
+```{r}
+resave_data <- FALSE # flag for saving data_stan and possibly others in future
+
+input_dir <- file.path("input")
+output_dir <- file.path("output")
+
+load(file.path(input_dir, c("obs_summary_stats.Rda", "stats_ind.Rda")),
+     verbose = TRUE)
+
+```
+
+# Fit Models
+
+## Common Parameters
+
+```{r}
+
+xmax <- 46
+x0max <- xmax - 0.1;
+x0min <- 20;
+
+y_xmax <- 0
+y0_min <- 10
+sd_y0_prior <- 200
+alpha_theta_prior <- 10 ## exponential dist scale parameter for overdispersion theta in quasipoisson
+alpha_phi_prior <- 0.01 ## gamma dist shape parameter for nb. brms default is 0.01
+beta_phi_prior <- 0.01 ## gamma dist rate parameter for nb. brms default is 0.01
+
+
+## values to use for model predictions
+x_for_predictions = seq(25, xmax, length.out = 100)
+```
+
+### Analyze `x ~ uniform_1 | groups_1, y ~ individual`
+
+Set up Data
+
+```{r}
+
+data_stan <- data_ind %>%
+    mutate(x0_group = NA, y0_group = NA, male = factor(male)) %>%
+    rename(y = motif_count, x = temp)
+
+if(resave_data) save(file = file.path(output_dir, paste0("data_stan_", format(Sys.time(), "%Y-%m-%d_%H-%M"), ".Rda")), data_stan)
+
+```
+
+```{r}
+
+models <- c("piecewise")
+sampling_dists <- c("nb", "com_poisson") ## lognormal doesn't work since the counts can be 0.
+flags_x <- c("uniform_1"
+             ##, "groups_1", ## this doesn't work with x0_Intercept prior, suggests error in priors
+             ##"individual"
+             )
+flags_y <- c("individual")
+N <- length(data)
+
+fit_tbl <- crossing(model = models,
+                    sampling_dist = sampling_dists,
+                    x0_flag = flags_x, y0_flag = flags_y,
+                    desc = "NA_character",
+                    y0_group_list = list(NA), #tbl_tmp, #list(NA),
+                    x0_group_list = list(NA),
+                    fit = list(NA),
+                    llik = list(NA),
+                    r_eff = list(NA),
+                    loo = list(NA)
+                    )
+
+## Run Analysis
+model = models[[1]]
+
+for(sampling in sampling_dists[[2]]) {
+
+    switch(sampling,
+           "nb"= {
+             family <- negbinomial(link = "identity", link_shape = "identity")
+             adapt_delta <- 0.9 #0.95
+             iter <- 2000
+             warmup <- floor(1/2 * iter)
+             thin <- 1
+             n_cores <- 4 ## set to 1 if getting errors from stan in order to see relevant message.
+             n_chains <- n_cores
+
+           },
+           "lognormal" = { ## doesn't work since we have 0 counts and 0 is undefined in lognormal
+             family <- lognormal(link = "identity", link_sigma = "log")
+             adapt_delta <- 0.9 #0.95
+             iter <- 2000
+             warmup <- floor(1/2 * iter)
+             thin <- 1
+             n_cores <- 4 ## set to 1 if getting errors from stan in order to see relevant message.
+             n_chains <- n_cores
+
+           },
+           "com_poisson"={
+             ## generalized poisson
+             ## quasipoisson
+             ## COM-Poisson: See https://discourse.mc-stan.org/t/brms-and-conway-maxwell-poisson-distribution/7368/17
+             ##   Also: str(brmsfamily("com_poisson"))
+             family <- brmsfamily("com_poisson", link="identity", link_shape="identity") #com_poisson(link="identity", link_shape="log")
+             adapt_delta <- 0.99 #0.95
+             iter <- 6000
+             warmup <- floor(4/5 * iter)
+             thin <- 1
+             n_cores <- 4 ## set to 1 if getting errors from stan in order to see relevant message.
+             n_chains <- n_cores
+             }
+           )
+  
+        print(family)
+        
+
+    
+    for(x_flag in flags_x) {
+    for(y_flag in flags_y) {
+
+        ## Set up variables for saving model and fit
+        desc <- paste0(model, ": ", sampling, ", " , x_flag, ", ", y_flag)
+        curr_row <- which(fit_tbl$sampling_dist == sampling &
+                          fit_tbl$x0_flag == x_flag &
+                          fit_tbl$y0_flag == y_flag)
+        fit_tbl[ curr_row, ]$desc <- desc
+
+      print(desc)
+      ## Refresh data in case x0_group or y0_group are all set to 1
+      data <- data_stan
+
+      ## Set flags based on fitted model structure
+      if(x_flag %in% c("uniform_1", "groups_1")) data <- mutate(data, x0_group = 1)
+      if(y_flag %in% c("uniform_1", "groups_1")) data <-mutate(data, y0_group = 1)
+      if(x_flag %in% c("individual")) data <- mutate(data, x0_group = male)
+      if(y_flag %in% c("individual")) data <- mutate(data, y0_group = male)
+
+
+
+      ## Note we need to put a tibble into a list because row updates, even if doing
+      ## just one cell, require a list format.
+      fit_tbl[[curr_row, "x0_group_list"]] <- list(unique(data[, c("male", "x0_group")]))
+      fit_tbl[[curr_row, "y0_group_list"]] <- list(unique(data[, c("male", "y0_group")]))
+
+        ## Parameter Structure
+        x_form <- switch(x_flag,
+                         uniform_1 = formula(x0 ~ 1),
+                         uniform_2 = formula(x0 ~ x0_group),
+                         # Don't include x0_group info which is determined by the data set
+                         groups_1 = formula(x0 ~ 0 + (1||male)), 
+                         groups_2 = formula(x0 ~ 0 + (1||male) + x0_group),
+                         individual = formula(x0 ~ 0 + male)
+                         )
+        
+        y_form <- switch(y_flag,
+                         uniform_1 = formula(y0 ~ 1),
+                         uniform_2 = formula(y0 ~ 0 + y0_group),
+                         groups_1 = formula(y0 ~ 0 + (1|| male)), 
+                         groups_2 = formula(y0 ~ 0 + (1|| male) + y0_group),
+                         individual = formula(y0 ~ 0 + male)
+                         ## `-1 + ` gives me the error:
+                         ## Warning in parallel::mclapply(1:chains, FUN = callFun, mc.preschedule = FALSE,  :
+                         ##  4 function calls resulted in an error
+                         ## Error in FUN(X[[i]], ...) : 
+                         ##  trying to get slot "mode" from an object (class "try-error") that is not an S4 object
+                         ## should I use `0 +` or `-1 +` ?
+                         )
+
+      ## Priors 
+      prior_core <- prior(
+        uniform(10, 1000), nlpar = "y0", lb = 10, ub = 1000
+        ##normal(150, 200), nlpar = "y0", lb = 10, ub = 1000 ## Previously used          
+        ##lognormal(log_y0_mean, 4 * log_y0_sd ## Never used due to data not really looking ~ logN
+        ##gamma(0.1, 100), nlpar = "y0", lb = 10, ub = 1000
+      ) + 
+        prior(uniform(30, 45.5), lb = 30, ub = 45.5, nlpar = "x0")
+      
+      prior <- switch(sampling,
+                      "nb" = prior_core, #  + prior(exponential(1), dpar = "shape", class = "sd"),
+                      "lognormal" = prior_core,
+                      "com_poisson" = prior_core  + prior(uniform(0.01, 100), class = "shape", lb = 1, ub = 20) ## adding lb and ub greatly speeds up model and improves fit
+                      )
+      
+      # Crazy parameter rich model where shape parameters vary by male
+      hyper_form <- switch(sampling,
+                      "nb" = formula(shape ~ 1|male),
+                      "lognormal" = formula(sigma ~ 1|male),
+                      "com_poisson" = formula(shape ~ 1|male) )
+      hyper_form <- NA
+      
+      nlform <- bf(
+            y ~  0 - (46 - fmax(x0, x)) * (0 - y0)/(46 - x0),
+            x_form,
+            y_form,
+            hyper_form,
+            nl = TRUE)
+
+        if(TRUE) print(get_prior(nlform,
+                                 data = data,
+                                 family = family
+                                 ))
+
+        save_model <-paste0(paste("brms", model, sampling, x_flag, y_flag, sep="_"), ".stan")
+        
+        fit <- brm(nlform,
+                   data = data,
+                   ## `link` refers to the mapping of the expectation of the distribution: log, sqrt, identity, softplus
+                   ## link_shape corresponds to `phi` of `stan`'s
+                   ## Negbinomial_2
+                   ## Defining `phi = mu/theta` creates a quasipoisson
+                   ## distribution with overdispersion parameter (1 +theta)
+                   family = family, #negbinomial(link = "identity", link_shape = "identity"),
+                   prior = prior,
+                   iter = iter,
+                   warmup = warmup,
+                   thin = thin,
+                   silent = ifelse(interactive(), 1, 2), # 0, 1, or 2. 1 is default
+                   control = list(adapt_delta = adapt_delta,
+                                  max_treedepth = 12
+                                  ##model_name = desc ## Incorrect way to set this.
+                                  ),
+                       ## Only print out sampling progress if in interactive mode
+                   refresh = ifelse(interactive(),max(iter/5, 1), 0),
+        chains = n_chains,
+        cores = n_cores,
+        save_model = save_model
+        )
+    ## Avoid having brms recompile model by defining
+    ## model in global environment
+        fit_tmp <- fit
+
+                                        #fit_exp <- expose_functions(fit) , vectorize = TRUE)
+                                        #fit_cr <- add_criterion(fit_exp, c("loo", "waic"))
+        print(fit)
+        save(file = file.path(output_dir, paste0(save_model, ".Rdata-tmp")), fit)
+        fit_tbl[[curr_row, "fit"]] <- list(fit)
+
+      ## Print current warnings
+      warnings(summary)
+      ## Clear warnings()
+      ##warning(immediate. = FALSE)
+
+    }
+    }
+}
+
+save(file = file.path(output_dir, paste0("fit_tbl_", format(Sys.time(), "%Y-%m-%d_%H-%M"), ".Rdata")), fit_tbl)
+
+```
+
+##### Output from model fits
+

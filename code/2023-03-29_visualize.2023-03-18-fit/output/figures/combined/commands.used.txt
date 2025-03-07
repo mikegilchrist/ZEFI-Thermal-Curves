@@ -1,0 +1,100 @@
+ 1719  04/10 10:04   evince Compressed_Hord_draft-3x2-reduced.pdf 
+ 1720  04/10 10:05   less ~/bin/reduce.pdf.size.sh 
+ 1721  04/10 10:05   bintail
+ 1722  04/10 10:06   emacs ~/bin/make.2x2.sh  ~/bin/reduce.pdf.size.sh 
+ 1723  04/10 10:10   reduce.pdf.size.sh Compressed_Hord_draft-3x2.pdf  eprint
+ 1724  04/10 10:11   reduce.pdf.size.sh Compressed_Hord_draft-3x2.pdf  ebook
+ 1725  04/10 10:12   curtail
+ 1726  04/10 10:13   mv Compressed_Hord_draft-3x2-reduced.pdf Hord-3x2.pdf
+ 1727  04/10 10:13   mv Compressed_Hord_draft* /tmp/
+ 1728  04/10 11:36   cd ~/Repositories/BibTeX.and.PDF.Tools/
+ 1729  04/10 11:36   curtail
+ 1730  04/10 11:36   git status
+ 1731  04/10 11:36   diff make.2x1.and.link.pdf.sh 
+ 1732  04/10 11:37   git diff make.2x1.and.link.pdf.sh 
+ 1733  04/10 11:37   git status
+ 1734  04/10 11:37   git add make.2x1.and.link.pdf.sh 
+ 1735  04/10 11:38   git commit -m "minor fixes and changes to allow broader range of CxR values"
+ 1736  04/10 11:38   git add reduce.pdf.size.sh 
+ 1737  04/10 11:38   git commit -m "Add optional argument for resolution: /screen, /eprint,..."
+ 1738  04/10 11:38   git push
+ 1739  04/10 11:40   cd
+ 1740  04/10 11:53   cd ~/EEB/Listserv/
+ 1741  04/10 11:53   tmptail
+ 1742  04/10 11:53   mbox2txt /tmp/RE\:\ FW\:\ Rejected\ posting\ to\ EEB-UNDERGRADS@LISTSERV.UTK.EDU.mbox 
+ 1743  04/10 11:54   curtail
+ 1744  04/10 11:54   my.rename 'RE:.FW:.' "" Wauford_2023-Apr-10_RE\:.FW\:.Rejected.posting.to.EEB-UNDERGRADS@LISTSERV.UTK.EDU.txt 
+ 1745  04/10 11:54   my.rename '@LISTSERV.UTK.EDU' "-SOLVED"
+ 1746  04/10 11:55   my.rename '@LISTSERV.UTK.EDU' "-SOLVED" Wauford_2023-Apr-10_Rejected.posting.to.EEB-UNDERGRADS@LISTSERV.UTK.EDU.txt 
+ 1747  04/11 10:44   pwd
+ 1748  04/11 10:44   ls -ltrh
+ 1749  04/11 10:44   cd ..
+ 1750  04/11 11:09   cd output/
+ 1751  04/11 11:09   pwd
+ 1752  04/11 11:09   cd figures/
+ 1753  04/11 11:09   ls -ltrh
+ 1754  04/11 11:09   pwd
+ 1755  04/11 11:09   pwd
+ 1756  04/11 11:09   cd ../render/
+ 1757  04/11 11:09   cd figures/
+ 1758  04/11 11:09   caja . &
+ 1759  04/11 12:47   cd ~/Personal/Lawn
+ 1760  04/11 12:47   less weedeater.manual.pdf 
+ 1761  04/11 12:47   ls -ltrh
+ 1762  04/11 13:01   tmptail
+ 1763  04/11 13:02   mv /tmp/11525394.pdf Kobalt_2020_string.trimmer.manual.pdf
+ 1764  04/11 13:04   evince Kobalt_2020_string.trimmer.manual.pdf 
+ 1765  04/11 14:55   cd ../
+ 1766  04/11 14:55   cd figures/
+ 1767  04/11 14:56   ls -ltrh
+ 1768  04/11 14:57   find ./ -type f -mtime -0.5 
+ 1769  04/11 14:57   find ./ -type f -mtime -0.5 -exec 'ls -l'
+ 1770  04/11 14:58   find ./ -type f -mtime -0.5 -exec sh -c 'ls -ltrh "{}"` \; |less
+ 1771  04/11 14:58   find ./ -type f -mtime -0.5 -exec sh -c 'ls -ltrh "{}"' \; |less
+ 1772  04/11 14:58   find ./ -type f -mtime -1 -exec sh -c 'ls -ltrh "{}"' \; |less
+ 1773  04/11 14:58   find ./ -type f -mtime -0.6 -exec sh -c 'ls -ltrh "{}"' \; |less
+ 1774  04/11 14:59   find ./ -type f -mtime +0.6 -exec sh -c 'ls -ltrh "{}"' \; |less
+ 1775  04/11 14:59   find ./ -type f -mtime +0.6 -delete
+ 1776  04/11 14:56   less ~/Linux.notes/find.usage.md 
+ 1777  04/11 15:00   png2pdf
+ 1778  04/11 15:01   for FILE in *.png; NEWFILE="${FILE/png/pdf}"; echo "$FILE" "$NEWFILE"; done
+ 1779  04/11 15:01   for FILE in *.png; do NEWFILE="${FILE/png/pdf}"; echo "$FILE" "$NEWFILE"; done
+ 1780  04/11 15:02   for FILE in *.png; do NEWFILE="${FILE/png/pdf}"; mv "$FILE" "$NEWFILE"; done
+ 1781  04/11 15:02   ps aux
+ 1782  04/11 15:02   ls -ltrh
+ 1783  04/11 15:02   rm -f *png
+ 1784  04/11 15:04   for FILE in plot-scatter*; do echo "$FILE"; done
+ 1785  04/11 15:05   for FILE in plot-scatter*; do echo "$FILE"; DESC=${FILE/plot_scatter//}; DESC="${DESC/.pdf//}"; echo "$DESC"; done
+ 1786  04/11 15:05   for FILE in plot-scatter*; do echo "$FILE"; DESC=${FILE/plot-scatter/}; DESC="${DESC/.pdf/}"; echo "$DESC"; done
+ 1787  04/11 15:06   for FILE in plot-scatter*; do echo "$FILE"; DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC"; done
+ 1788  04/11 15:06   for FILE in plot-scatter*; do DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC";done
+ 1789  04/11 15:06   for FILE in plot-scatter*; do DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC"; ls "*$DESC\*" ;done
+ 1790  04/11 15:07   for FILE in plot-scatter*; do DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC"; ls "*$DESC*" ;done
+ 1791  04/11 15:07   for FILE in plot-scatter*; do DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC"; ls ".*$DESC.*" ;done
+ 1792  04/11 15:08   for FILE in plot-scatter*; do DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC"; ls "*$DESC*" ;done
+ 1793  04/11 15:08   ls *nbinom-type1_two-piece_x0-uniform-1_y0-individual_disp-flag-groups-1_disp-prior-0.01_filter-TRUE*
+ 1794  04/11 15:08   for FILE in plot-scatter*; do DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC"; ls '.*$DESC.*' ;done
+ 1795  04/11 15:10   for FILE in plot-scatter*; do DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC"; ls *"$DESC"* ;done
+ 1796  04/11 15:10   mkdir combined
+ 1797  04/11 15:10   for FILE in plot-scatter*; do DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC"; pdftk *"$DESC"* cat output "combined/$DESC.pdf";done
+ 1798  04/11 15:11   ls combined/
+ 1799  04/11 15:12   for FILE in plot-scatter*; do DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC"; pdftk *"$DESC"* cat output "combined/$DESC.pdf";done
+ 1800  04/11 15:12   evince plot-pairs_nbinom-type1_two-piece_x0-individual_y0-individual_disp-flag-uniform-1_disp-prior-0.01_filter-TRUE.pdf
+ 1801  04/11 15:13   for FILE in plot-pairs*.pdf; do NEWFILE="${FILE/pdf/png}"; mv "$FILE" "$NEWFILE"; done
+ 1802  04/11 15:13   for FILE in *.png; do NEWFILE="${FILE/png/pdf}"; convert "$FILE" "$NEWFILE"; done
+ 1803  04/11 15:13   ls -ltrh
+ 1804  04/11 15:14   ls -ltrh *.png
+ 1805  04/11 15:15   mv *.png /tmp/figures/.
+ 1806  04/11 15:15   mkdir /tmp/figures
+ 1807  04/11 15:15   mv *.png /tmp/figures/.
+ 1808  04/11 15:15   for FILE in plot-scatter*; do DESC=${FILE/plot-scatter_/}; DESC="${DESC/.pdf/}"; echo "$DESC"; pdftk *"$DESC"* cat output "combined/$DESC.pdf";done
+ 1809  04/11 15:15   cd combined/
+ 1810  04/11 15:15   pdftk * cat combined.pdf
+ 1811  04/11 15:15   pdftk * cat output combined.pdf
+ 1812  04/11 15:15   evince combined.pdf 
+ 1813  04/11 15:17   cd ..
+ 1814  04/11 15:17   caja . &
+ 1815  04/11 15:19   cd combined/
+ 1816  04/11 15:19   make.2x1.sh  combined.pdf 
+ 1817  04/11 15:19   evince combined-2x1.pdf 
+ 1818  04/11 15:21   history | tail -100 > commands.used.txt

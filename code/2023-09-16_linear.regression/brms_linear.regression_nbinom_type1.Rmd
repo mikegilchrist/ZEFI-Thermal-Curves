@@ -1,0 +1,1145 @@
+---
+title: "Piecewise Regression with Negative Binomial Type I Error on Real Data using `brms` Custom Family"
+author: "Michael Gilchrist"
+date: "Created: 2023-05-18; Compiled: `r date()`"
+output: 
+#    pdf_document:
+        # improve float placement
+        # see https://bookdown.org/yihui/rmarkdown-cookbook/figure-placement.html
+        # extra_dependencies: ["flafter"]
+        # Another way to try and control float placement
+        #extra_dependencies: ["float"]        
+        #keep_tex:  true
+---
+
+```{r setup, include = FALSE}
+
+knitr::opts_chunk$set(
+  #dev = 'pdf',
+  fig.height = 8.5, #set height for all figures, can be changed for individual chunks
+  fig.pos = "H", out.extra = "", # option for latex pacakge `float`
+  warning = TRUE, # show warnings
+  message = TRUE, # show messages
+  error = TRUE, # do not interrupt generation in case of errors,
+  echo = TRUE  # show R code
+)
+
+
+## Set font size for PDF
+## Taken from: https://stackoverflow.com/a/70016800/5322644
+## Doesn't work, just prints `\small` in pdf output
+## def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+## knitr::knit_hooks$set(chunk = function(x, options) {
+##     x <- def.chunk.hook(x, options)
+##     paste0("\n \\", "\\small","\n\n", x, "\n\n \\normalsize")
+## })
+
+
+if(interactive()) {
+  default::default(.ess.eval) <- list(max.deparse.length=2E2, output = TRUE)
+  output_dir <- "output"  
+} else { # keep knitted output separate
+  output_dir = file.path("output", "render")
+}
+
+output_dir_list <- file.path(output_dir, c("tibbles", "stan", file.path("stan", "code"), file.path("stan", "binary"), "figures", "cmdstanr"))
+lapply(output_dir_list, dir.create, showWarnings = FALSE, recursive = TRUE, mode = "0777")
+
+options(max.print = 500)
+
+```
+# History
+
+- 2023-09-16: Focus on using linear regression
+  - Error assumptions
+    - Log normal
+    - nb_type1
+    
+
+# Goal
+
+- Fit simple linear regression to potentially only the third set of data.
+
+> Negative Binomial distribution parameterized by mean (mu) and overdispersion parameter (theta).
+> This parameterization is referred to as NEGBIN type I (Cameron and Trivedi, 1998) as cited by
+> https://doi.org/10.1080/03610926.2018.1563164
+> ##
+> `x ~ nbinom_type1(mu, theta)`, where `E(x) = mu, Var(x) = (theta + 1) mu`
+> This should not be confused with the mu and shape parameterization of nbinom in R or the 'alternative' NB (`neg_binomial_2_...`) in stan
+> Note using disp instead of theta because theta is reserved within `brms` (?) 
+> > Error: Currently 'dirichlet' is the only valid prior for simplex parameters. See help(set_prior) for more details.
+> when trying to fit the model.
+
+
+## Recap
+
+- Prevoius work was fruitless
+
+## Insights
+
+
+# Set up
+
+## Install libraries
+
+```{r, message = FALSE}
+
+## load libraries
+library(MASS) # provides negative binomial fitting:  glm.nb
+library(stats)
+library(tidyverse)
+library(brms)
+library(loo)
+library(ggplot2)
+#library(tidybayes)
+library(ggpubr)
+library(grid)
+library(gridExtra)
+library(ragg)
+library(GGally)
+library(cowplot)
+library(bayesplot)
+theme_set(theme_minimal())
+ggplot2::theme_update(text = element_text(size = 10)) #base_size = 10)
+#ggplot2::theme_set(theme_default(plot.background = element_rect(color = "black")))
+
+library(broom)
+library(viridisLite)
+library(cmdstanr)
+library(rstan)
+
+options(cmdstanr_write_stan_file_dir = file.path("output", "cmdstanr"))
+
+options(mc.cores = (parallel::detectCores()-2))
+rstan_options(auto_write = TRUE)
+
+## options(ggplot2.continuous.colour="viridis",
+##        ggplot2.discrete.colour="viridis",
+##        ggplot2.scale_fill_discrete = scale_fill_viridis_d,
+##        ggplot2.scale_fill_continuous = scale_fill_viridis_c)
+
+library(reshape2)
+library(lme4)
+library(latex2exp)
+
+```
+
+## Source Files
+
+### Local Functions
+```{r}
+
+source("../Local.Functions/local.functions_ZFI.fittings.R")
+
+
+which_switch_male <- function(flag) {
+  return <- NA #default value
+
+  if(flag %in% c("uniform_1", "groups_1")) return <- "single"
+  if(flag %in% c("uniform_2", "groups_2")) return <- "double"
+  if(flag %in% c("individual")) return <- "individual" 
+
+  return(return)
+}
+
+```
+
+## Custom family
+
+```{r}
+source("../../../custom-brms-families/families/nbinom_type1.R")
+```
+## Load Data
+
+```{r}
+infiles <- file.path("input", dir("input"))
+print(infiles)
+
+sapply(infiles,
+       load, verbose = TRUE, envir = .GlobalEnv)
+
+head(stats_ind)
+names(stats_ind)
+
+head(data_ind)
+names(data_ind)
+
+data_lst <- list()
+for(i in 1:3) {
+  data_lst[[i]] <- data_ind %>% filter(round == i)
+}
+
+data_lst[[4]] <- data_ind
+
+data_log10_lst <- list()
+for(i in 1:3) {
+  data_log10_lst[[i]] <- data_lst[[i]] %>% mutate(motif_count = motif_count + 1)
+}
+
+
+```
+
+## Local Settings
+
+```{r}
+#set seom variables that I expect to change below
+
+display_plots <- FALSE
+save_plots_file <- FALSE
+color_scheme_set("viridis")
+
+```
+
+## Visualize Summary Stats
+
+```{r, eval = FALSE}
+
+round <- 3
+
+data_summary_stats <- data_lst[[round]] %>%
+  group_by(male) %>%
+  #filter(temp <=40) %>% 
+  summarize(mean = mean(motif_count),
+            sd = sd(motif_count),
+            var = sd^2,
+            cv = sd(motif_count)/mean(motif_count),
+            var_to_mean = var/mean,
+            var_to_mean_sqr = var/(mean^2),
+            phi = mean^2/(var - mean) # phi is the overdispersion parameter in the type 2 NB
+            )
+
+phi_median <- median(data_summary_stats$phi)
+phi_mean <- mean(data_summary_stats$phi)
+phi_sd <- sd(data_summary_stats$phi)
+
+
+hist <- ggplot(data_summary_stats, aes(phi)) +
+  geom_histogram(bins = 10)
+plot_grid(plotlist = list(hist, hist + scale_x_log10()))
+
+plot_pairs <- pairs(data_summary_stats %>% select(-c(male, cv, sd, var_to_mean_sqr)))
+
+hist <- ggplot(data_summary_stats, aes(var)) +
+  geom_histogram(bins = 6)
+
+hist_log <- hist + scale_x_log10()
+
+plot_grid <- plot_grid(plotlist = list(hist, hist_log))
+last_plot()
+
+gg_data <- ggplot(data_lst[[round]])
+gg_points <- gg_data + geom_point(aes(temp, motif_count))
+gg_grid <- gg_points + facet_wrap(vars(male))
+
+
+gg_grid_log <- gg_grid + scale_y_log10()
+plot_grid(plotlist = list(gg_grid, gg_grid_log))
+
+
+```
+
+
+# Fit Models
+
+- Code derived from `../2023-02-28_fit.real.data.using.nbinom_type1/brms_two.piece_fit.nbionm_type1.Rmd`
+
+
+## Set up functions, parameters, and results tibble 
+
+### Simple Linear Regression
+
+```{r}
+
+round <- 3
+
+data <- data_lst[[round]] %>%
+  left_join(y=data_summary_stats, by = "male") %>%
+  filter(var < 10000)
+
+if(!exists("fit_lst")) fit_lst <- list()
+
+formula_linear <-  bf(motif_count ~ 1 + temp +  (1 + temp||male))
+                     
+fit_lst[["normal"]] <- brm(formula = formula_linear, 
+           data = data,
+           control = list(adapt_delta = 0.85),                          
+           iter = 20000,
+           warmup = iter*0.75,
+           thin  = 1,
+           prior = prior(uniform(1, 500), class = "Intercept", lb = 1, ub = 500),
+           backend = "cmdstanr",
+           file = "linear_normal" # files to be saved in output/cmdstanr
+           )
+
+fit <- update(fit_lst[["normal"]],
+              #              thin = 10,
+              iter = 100000,
+              warmup = iter*0.5,
+              control = list(adapt_delta = 0.95))
+
+
+fit <- fit_lst[["nbinom_1"]] <- brm(formula = formula_linear,
+           data = data,
+           family =  nbinom_type1(link = "identity", link_disp = "identity"),
+           stanvar = stanvar(scode = stan_nbinom_type1, block = "functions"),
+           control = list(adapt_delta = 0.85),
+           iter = 20000,
+           warmup = iter*0.75,
+           thin  = 1,
+           prior = prior(uniform(1, 500), class = "Intercept", lb = 1, ub = 500) +
+             prior(gamma(0.1, 0.1), class = "disp", lb = 0),
+           #backend = "cmdstanr",
+           #file = "linear_nbinom_1"
+           )
+
+fit <- update(fit_lst[["nbinom_1"]],
+              #              thin = 10,
+              iter = 50000,
+              thin = 10,
+              warmup = iter*0.75,
+              control = list(adapt_delta = 0.95))
+
+
+
+
+```
+
+    
+# Code from previous file
+
+## Set up Dataframe for fit results
+
+- In retrospect, I should just define the columns and then populate the cells when I do my fittings.
+
+
+```{r}
+
+fit_tbl_initiate_crossed <- TRUE
+
+models <- c("linear", "linear_threshold")
+sampling_dists <- c("nbinom_type1") ##, "com_poisson") ## lognormal doesn't work since the counts can be 0.
+flags_x0 <- c("uniform_1",
+              "uniform_2",
+              "groups_1", ## this doesn't work with x0_Intercept prior, suggests error in priors
+              "groups_2", #              "groups_2a",
+              #              "groups_2b",
+              "individual")
+
+flags_y0 <- c("uniform_1", "groups_1", "individual") %>% last()
+
+values_disp <- switch(1,
+                      c(0.01), # 0.125 is a good value
+                      c(0.01, 0.1), #, 0.25), # used in exploring model behavior
+                      list(0.1, "flat"), #, 0.1, 1) # doesn't work yet
+                      c("flat"),
+                      c(0.5)
+
+flags_disp <- c("uniform_1", "uniform_2", "groups_1", "groups_2", "individual")
+
+
+## whether to filter males with large disp values estimated using one piece model
+filter_male <- c(TRUE, FALSE)
+
+N <- length(data)
+
+## define full table a priori
+fit_tbl_crossed <- crossing(
+  #sampling_dist = sampling_dists,
+  x0_flag = flags_x0,
+  y0_flag = flags_y0,
+  disp_flag = flags_disp,
+  disp_value = values_disp,
+  filter_male = filter_male,
+  fit = list(NA),
+  stats_fit = list(NA),
+  fit_best = list(NA),
+  fit_top = list(NA),
+  plots = list(list()),
+  llik = list(NA),
+  r_eff = list(NA),
+  loo = list(NA),
+  desc = NA,
+  model = models,
+
+)
+
+
+if(fit_tbl_initiate_crossed) {
+
+  fit_tbl <- fit_tbl_crossed
+} else {
+
+  ## Use an empty tibble
+  fit_tbl <- fit_tbl_crossed[0, ]
+}
+
+```
+
+
+### Run fit
+
+Note
+
+- Code starting wth `results=...` added to allow use of `\clearpage`
+  For more details, see: [https://stackoverflow.com/a/48069427/5322644].
+
+```{r, message = TRUE} 
+
+##, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex'), echo = TRUE} 
+
+if(interactive()) {
+    ## Run Settings
+    run_fits <- TRUE
+    ## run_fits <- FALSE
+    save_fits <- FALSE
+    save_fits <- TRUE 
+    run_fits_force <- TRUE #
+    #run_fits_force <- TRUE # force refitting of model; used with run_fits = TRUE
+    load_fits <- FALSE  # reload fit_tbl even if it already exits; used with run_fits = FALSE
+    verbose <- TRUE
+
+    ## Fit Settings
+    render_plots <- TRUE ## Build or use previously generated plots in tbl
+    render_plots_force <- TRUE ## Force regeneration of plots if they already exist
+    render_hex <- TRUE
+    render_hist <- TRUE
+    render_pairs <- FALSE
+    off_diag_fun = "hex"
+    display_plots <- FALSE ## Display plots to local device?
+    save_plots_file <- TRUE  ## Save plots to file?
+} else {
+
+    ## Non-interactive (Knitr) settings 
+    run_fits <- FALSE
+    save_fits <- FALSE
+    ## save_fits <- TRUE 
+    run_fits_force <- FALSE # force refitting of model; used with run_fits = TRUE
+    load_fits <- TRUE  # load fit_tbl below?
+    verbose <- TRUE
+
+    ## Fit Settings
+    render_plots <- TRUE ## Build or use previously generated plots in tbl
+    render_plots_force <- TRUE ## Force regeneration of plots if they already exist
+    render_hex <- TRUE
+    render_hist <- TRUE
+    render_pairs <- TRUE
+    off_diag_fun <- "hex"
+    display_plots <- TRUE
+    save_plots_file <- TRUE
+}
+
+## Get all fits similar to the best one
+## DOESN"T WORK CONSISTENTLY
+## There's an issue with the local.functions code
+## not working with both stanfit and brmsfit objects
+## It's very confusing
+make_stan_best <- TRUE
+## Get X top fits, independent of if they are consistent with the 'best'
+make_stan_top <- TRUE
+
+## Print settings
+print_get_prior <- TRUE ## Print generic priors, prior to fit.
+print_prior_summary <- TRUE  ## Print actual priors, post fitting
+
+if(run_fits_force) {
+  infile_tbl <- NULL
+} else {
+  infile <- last(dir(file.path(output_dir, "tibbles"), "fit_tbl.*"))
+  ## over ride latest file below
+  #infile <- "fit_tbl_adapt-delta-0.90.Rda"
+  infile_tbl <- file.path(output_dir, "tibbles", infile)
+  
+  if(load_fits) {
+    print(paste0("Loading `infile_tbl` = ", infile_tbl))
+    load(infile_tbl)
+    #fit_tbl[["plots"]] <- list()
+  }
+  
+}
+
+
+if(save_fits) {
+  cur_time <- gsub(" ", "_", Sys.time()) %>% gsub(":", ".", .)
+  outfile_tbl <- file.path(output_dir, "tibbles", paste0("fit_tbl_", cur_time, ".Rda"))
+} else {
+  outfile_tbl <- NA ## NULL causes an error when trying to print
+}
+
+print_pairs_plot <- FALSE  # Could base on model used, gets large when lots of individual or groups
+
+sampling = "nbinom_type1"
+prior_shape_y0 = "flat"
+
+n_chains <- 10
+n_cores <- n_chains
+n_chains_top <- 4  # how many to keep for model analysis
+
+flags_x0_used <- c("individual", "groups_1", "uniform_1") # %>% rev()#
+flags_y0_used <- c("individual")
+values_disp_used <- values_disp
+flags_disp_used <- c("individual", "groups_1", "groups_2", "uniform_1", "uniform_2") #  |> rev() |> first()
+models_used <- c("one_piece", "two_piece", "asymptotic")[2] #c("one_piece", "two_piece") #, "two_piece")
+shape_y0_prior <- "flat" # flat or normal
+
+## These males produce bimodial posteriors and interfere with model fitting
+## Ideally, we'd do a preliminary analysis without them and then include them later.
+#male_filter = c("T235", "T236")
+
+## These males have huge dispersion outside the predicted valeus
+male_disp_high <- c("T235", "T243")
+male_x0_high <- NA ## Define later
+male_filter_out <- c("T235", "T243")
+
+curr_row <- 1
+
+
+for(model in models_used) {
+  print(model)
+  switch(model,           
+         two_piece = {
+           ## Note issues in non-convergence are related to bimodality of posterior surface.
+           stan_func <- stan_two_piece_func
+           warmup <- 30000 # floor(3/4 * iter)
+           iter <- warmup + 10000
+           adapt_delta <- 0.85 ## increasing from 0.9 to 0.99 didn't help eliminate divergence
+           thin <- 5
+         },
+         one_piece = {
+           stan_func <- stan_one_piece_func
+           warmup <- 2000 
+           iter <- warmup + 2000
+           thin <- 4
+           adapt_delta <- 0.7
+         },
+         asymptotic = {
+           stan_func <- stan_asymptotic_func
+           warmup <- 2000
+           iter <- warmup + 2000
+           thin <- 4
+           adapt_delta <- 0.9
+         }
+         
+         )
+
+  cat(stan_func)
+  
+
+  for(male_filter in c(FALSE)) { #, TRUE)) {
+    
+    for(disp_flag in flags_disp_used) {  
+      
+      for(x0_flag in flags_x0_used) {
+        
+        for(y0_flag in flags_y0_used) {
+
+          ## define variable for labeling figures
+          x0_label <- ifelse(model == "one_piece", "NA", x0_flag)
+
+
+          for(disp_value in values_disp_used) {
+
+            ## Set up variables for saving model and fit
+
+            desc_short <- paste0("x0: " , x0_label, "; y0: ", y0_flag, "; disp_flag: ", disp_flag, "; disp prior: ", disp_value, "; filter: ", male_filter)
+            desc <- paste0(sampling, "; ", model, "; ", desc_short)
+            #print(desc)
+            
+            desc_filename <- gsub("_|\\.", "-", desc) %>%
+              gsub("; ", "_", .) %>%
+              gsub(":? ", "-", .)
+
+            #stan_model_name <- sub(desc_filename, "_disp-prior-[0-9.]+_filter", "_filter")
+            stan_model_name <- desc_filename #sub("_disp-prior-[0-9.]+_", "_", desc_filename)
+            
+
+            if(run_fits) {
+
+              ifelse(length(fit_tbl) >= curr_row, fit_prerun <- fit_tbl[[curr_row, "fit"]][[1]], fit_prerun <- "NA")
+              if(run_fits_force | !is_brmsfit(fit_prerun)) {
+                print("Fitting Models")
+                switch(sampling,
+                       "nbinom_type1"= {
+                         family <- nbinom_type1(link = "identity", link_disp = "identity")
+                         adapt_delta <- adapt_delta #0.95 ## will decreasing value increase ESS? Seems like it
+                         iter <- iter
+                         warmup <- warmup
+                         thin <- thin
+                         n_cores <- n_cores ## set to 1 if getting errors from stan in order to see relevant message.
+                         n_chains <- n_chains
+                         stanvar_func <-
+                           stanvar(scode = paste(
+                             stan_func,
+                             stan_nbinom_type1, sep = "\n"),
+                             block = "functions")
+                       }
+                       )
+
+                ## Refresh data in case x0_group or y0_group are all set to 1
+                data <- data_tbl
+                
+                if(model == "one_piece") data <- data %>% filter(x < xignore)
+                if(male_filter) data <- data %>%
+                                  filter(!(male %in% male_filter_out))
+
+
+                print("Set grouping flags and formula")
+                
+                for(flag_prefix in c("x0", "y0", "disp")) {
+
+                    
+                  category_txt <- paste0(flag_prefix, "_category")
+                  flag_txt <- paste0(flag_prefix, "_flag")
+                  flag <- eval(parse(text = flag_txt))
+                    
+                  ## Map from flags to more general categories below: "single", "double"...
+                  switch_male <- which_switch_male(flag)
+
+                  data <- switch(switch_male,
+                                 "single" = {
+                                   mutate(data, tmp_group = 1)
+                                 },
+                                 "double" = {
+                                   male_high <- eval(parse(text=paste0("male_", flag_prefix, "_high")))
+                                   mutate(
+                                     data,
+                                     tmp_group =
+                                       as.factor(if_else(male %in% male_high, 2, 1)))
+                                 },
+                                 "individual" = {
+                                   mutate(data, tmp_group = 1) #tmp_group = male)
+                                 },
+                                 NA
+                                 ) %>%
+                    rename(!!category_txt := tmp_group)
+
+                  print(paste0(flag_prefix, ": ", flag))
+                  
+                  flag_str <- paste0(flag_prefix, "_category")
+                  
+                  string_formula <- switch(flag,
+                                           uniform_1 = paste0(flag_prefix, " ~ 0 + Intercept"),
+                                           ## Doesn't work: paste0(flag_prefix, " ~ 0 + ", flag_str),
+                                           uniform_2 = paste0(flag_prefix, " ~ 0 + ", flag_str),
+                                           ## `0 + Intercept` avoids prior being defined on centered data
+                                           ## The following formulation is incorrect and
+                                           ## assumes that x0 is centered around 0
+                                           ## groups_1 = formula(x0 ~ 0 + (1|male)),
+                                           ## According to the brms documentation, nonlinear models
+                                           ## are always uncentered, thus previously we used
+                                           ##   groups_1 = paste0(flag_prefix, " ~ 0 + Intercept + (1|male)"),
+                                           ## but we now use
+                                           groups_1 = paste0(flag_prefix, " ~ (1 + 1|male)"),
+                                             ##paste0(flag_prefix, " ~ 0 + ", flag_str, " + (", flag_str, "|male)"),
+
+                                           
+                                           ## groups_2 = paste0(flag_prefix, " ~ 0 + Intercept + (1|male) + ", flag_str),
+                                           groups_2 = paste0(flag_prefix, " ~ ", flag_str, " + (1|male)"),
+                                           ##paste0(flag_prefix, " ~ 0 + (", flag_str, "|male)"),
+                                             
+                                           individual = paste0(flag_prefix, " ~ 0 + male"), ## Do not use 1 + male!
+                                           NA
+                                           )
+                  form_txt <- paste0(flag_prefix, "_form")
+                  assign(form_txt, as.formula(string_formula))
+                }
+
+                ## str_extract_all(names(data), ".*_flag") %>%
+                ##   unlist() %>%
+                ##   print()
+                
+                ## Used in asymptotic model: use phi instead of threshold x0
+                phi_form <- formula(deparse(x0_form) %>% gsub("x0", "phi", .))
+
+
+                threshold_form <- switch(model,
+                                         two_piece = x0_form,
+                                         one_piece = NULL,
+                                         asymptotic = phi_form
+                                         )
+
+                nlform <- switch(model,
+                                 two_piece = bf(y ~ two_piece(x, x0, y0), nl = TRUE),
+                                 one_piece = bf(y ~ one_piece(y0), nl = TRUE),
+                                 asymptotic = bf(y ~ asymp(x, phi, y0), nl = TRUE)
+                                 ) +
+                  threshold_form +
+                  disp_form +
+                  y0_form
+
+
+                
+                print("Define priors")
+
+                ## pass disp_value via stanvar argument
+                stanvar_prior <- stanvar(disp_value, name = "disp_value")
+                
+                prior_string <- if(disp_value == "flat") {
+                  "uniform(0, 500)"
+                } else {
+                  # encode non-flat prior here, which force recompling when disp_value changes
+                  #paste0("exponential(", disp_value, ")")
+                  # pass disp_value via stanvar argument
+                  # Allows disp_value to be changed w/o recompiling
+                  "exponential(disp_value)" 
+                }
+                disp_priors <- switch(disp_flag,
+                                      #uniform_1 = set_prior(prior_string, class = "disp", lb = 0, ub = 20),
+                                      ## Form when disp ~ 1:
+                                      uniform_1 = set_prior(prior_string, class = "b", dpar = "disp", lb = 0, ub = 20),
+                                      uniform_2 = NULL, ## This is probably broken
+                                      groups_1 = set_prior(prior_string,
+                                                           class = "b", dpar = "disp", lb = 0, ub = 20) +
+                                        set_prior("uniform(0.1, 20)", class = "sd", dpar = "disp", lb = 0.4, ub = 5),
+                                      groups_2a = NULL,
+                                      groups_2b = NULL,
+                                      individual = set_prior(prior_string,
+                                                             dpar = "disp", lb = 0, ub = 20)
+                                      
+                                      )
+                
+                ## x0 only used in two_piece model
+                x0_prior <- switch(x0_flag,
+                                   uniform_1 = NULL,
+                                   uniform_2 = NULL,
+                                   groups_1 = prior(student_t(3, 0, 66.7), lb = 0, ub = 10, class = "sd", nlpar = "x0"),
+                                   groups_2 = NULL,
+                                   individual = NULL
+                                   )
+                
+                x0_priors <- prior(uniform(32, 45.9), lb = 32, ub = 45.9, nlpar = "x0") +
+                  #prior(uniform(32, 45.9), lb = 32, ub = 45.9, nlpar = "x0") +
+                  x0_prior
+
+                phi_priors <- prior(uniform(0.1, 100), lb = 0.01, ub = 17, nlpar = "phi")
+                
+                y0_priors <- switch(prior_shape_y0,
+                                    ## Values based on calculations at top of file using `temp_threshold`,
+                                    normal = prior(normal(125, 500), nlpar = "y0", lb = 10, ub = 1000), 
+                                    # flat prior
+                                    # - consistent with fact we're working with motifs, not songs
+                                    # - avoids bimodal posterior sampling issues with T235 and 236
+                                    flat =  prior(uniform(10, 1000), nlpar = "y0", lb = 10, ub = 1000) 
+                                    
+                                    )
+
+                threshold_priors <- switch(model,
+                                           two_piece = x0_priors,
+                                           one_piece = NULL,
+                                           asymptotic = phi_priors
+                                           )              
+
+
+                prior <- switch(model,
+                                one_piece = {
+                                  y0_priors + disp_priors
+                                },
+                                threshold_priors + y0_priors + disp_priors
+                                )
+
+                if(print_get_prior) {
+                  tmp <- get_prior(nlform,
+                                   data = data,
+                                   family = family
+                                   )
+                  print(tmp,
+                        max.print = 500)                  
+                }
+                
+                stan_code <- file.path(output_dir,
+                                       "stan", "code", paste0(stan_model_name, ".stan"))
+                ## make_stancode( .... save_model = stan_code)
+                fit <- brm(nlform,
+                           data = data,
+                           ## `link` refers to the mapping of the expectation of the distribution: log, sqrt, identity, softplus
+                           ## link_shape corresponds to `phi` of `stan`'s
+                           ## Negbinomial_2
+                           ## Defining `phi = mu/theta` creates a quasipoisson
+                           ## distribution with overdispersion parameter (1 +theta)
+                           family = family, #negbinomial(link = "identity", link_shape = "identity"),
+                           prior = prior,
+                           stanvar = stanvar_func + stanvar_prior, ## pass prior values here
+                           iter = iter,
+                           warmup = warmup,
+                           thin = thin,
+                           silent = ifelse(interactive(), 1, 2), # 0, 1, or 2. 1 is default
+                           control = list(adapt_delta = adapt_delta,
+                                          max_treedepth = 12
+                                          ##model_name = desc ## Incorrect way to set this.
+                                          ),
+                           ## Ideally save model to avoid need to recompile
+                           stan_model_args = list(
+                             model_name = file.path(output_dir, "stan", "binary", stan_model_name)
+                           ),
+                           #sample_prior =  "no", ## note improper priors not sampled
+                           ## Only print out sampling progress if in interactive mode
+                           refresh = ifelse(interactive(),max(iter/5, 1), 0),
+                           chains = n_chains,
+                           cores = n_cores,
+                           save_model = stan_code
+                           )
+
+                ## We should repeatedly refit model until we get desired number of fit_best
+                #print("Prior Summary")
+                #print(prior_summary(fit))
+                #print("Fit Information")
+                #print(desc)
+                #print(fit)
+                
+                #fit_exp <- expose_functions(fit) , vectorize = TRUE)
+                #fit_cr <- add_criterion(fit_exp, c("loo", "waic"))
+                fit_tbl[[curr_row, "fit"]] <- list(fit)
+                fit_tbl[[curr_row, "x0_flag"]] <- x0_flag
+                fit_tbl[[curr_row, "y0_flag"]] <- y0_flag
+                fit_tbl[[curr_row, "disp_flag"]] <- disp_flag
+                fit_tbl[[curr_row, "disp_value"]] <- disp_value
+                ## Print current warnings
+                warnings(summary)
+                ## Clear warnings()
+              } else {
+                print("Using pre existing fit")
+                fit <- fit_prerun
+              }
+
+              
+              ## Extract up to `n_chains_top` chains for fit_best and fit_top
+
+              verify_brmsfit(fit)
+              fit_brms <- fit
+              fit_stan <- fit_brms$fit
+              stats_fit <- calc_fit_lp_stats(fit_brms)
+              print(stats_fit %>% arrange(desc(mean)))
+              fit_tbl[[curr_row, "stats_fit"]][[1]] <- stats_fit
+
+              
+              if(make_stan_best) {
+                fit_stan_best <- keep_chains_top(fit_stan, n_chains_max = n_chains_top, verbose = TRUE, best_only = TRUE)
+                ## use existing brms object to update
+                fit_best <- fit_brms
+                fit_best$fit <- fit_stan_best
+                ## update tbl
+                ##str(fit)
+                fit_tbl[[curr_row, "fit_best"]][[1]] <- fit_best
+              }
+
+              if(make_stan_top) {
+                ## Get the top fits
+                fit_stan_top <- keep_chains_top(fit_stan, n_chains_max = n_chains_top, verbose = FALSE, best_only = FALSE)
+                ## Use current fit object to construct new one
+                fit_top <- fit_brms
+                fit_top$fit <- fit_stan_top
+                ## update tbl
+                fit_tbl[[curr_row, "fit_top"]][[1]] <- fit_stan_top
+              }
+              ## end if(run_fits)
+            } else { 
+              print("Working with Pre-existing Fits")
+              
+              ## Try to assign from local memory.
+              if(!exists("fit_tbl") | nrow(fit_tbl) == 0) {
+                print(paste("Loading Models from file", infile_tbl))       
+                load(file = infile_tbl, verbose = TRUE)
+                ## Need only for older fittings
+                fit_tbl <- add_column_safely(fit_tbl, "plots")
+              }
+              
+              fit <- fit_tbl[[curr_row, "fit"]][[1]]
+              print(paste0("`class(fit)` = ", class(fit)))
+              fit_stan <- fit$fit
+              ## These shoudl be brmsfit objects
+              fit_top <- fit_tbl[[curr_row, "fit_top"]][[1]]
+              fit_best <- fit_tbl[[curr_row, "fit_best"]][[1]]
+              stats_fit <- fit_tbl[[curr_row, "stats_fit"]][[1]]
+
+            } ## end loading of previous fits
+
+            cat("\n\n\n")
+            
+            ## lp_stats <- calc_fit_lp_stats(fit)
+            if(print_prior_summary) {
+              print(desc)
+              print("Prior Information")
+              print(prior_summary(fit)) # %>% filter(nlpar!="y0"))
+            }
+
+            print(desc)
+            print("Fit Information")
+            print(summary(fit)) #, pars = "x0*"))          %>% filter(nlpar!="y0"))
+            print(stats_fit)
+
+            ## Clean up variable names
+            fit_stan_rename <-
+              fit_stan %>%
+              clean_var_names()
+            
+            data <- fit$data
+            vars_clean <- names(fit_stan_rename) %>% na.omit(.)
+            male_vec <- unique(data$male) %>% as.character(.)
+            ## get male specific vars (start with "T")
+            vars_T <- grep("^T[0-9]{3}", vars_clean, value = TRUE)
+            vars_Intercept <- grep("Intercept", vars_clean, value = TRUE)
+            vars_non_T <- vars_clean[!(vars_clean %in% c(vars_T, vars_Intercept))]
+
+            drop_lprior <- TRUE
+            if(drop_lprior) vars_non_T <- str_subset(vars_non_T, "lprior", negate = TRUE)
+            #print(vars_clean)
+            ##  Get plots for current fit settings
+            plots_row <- fit_tbl[[ curr_row, "plots"]][[1]]
+
+            if(verbose) print("Plotting Trace")
+            ## indicate plot name
+            plot_name <- "plot_trace"            
+            plot_curr <- plots_row[[plot_name]]
+            if( (is.null(plot_curr)  | render_plots_force) & render_plots) { ## Generate and append plot
+              ## Plotting code goes below here
+              plot_trace <- mcmc_trace(fit, pars = c("lp__")) +
+                ggtitle(desc_short)
+              ## Finish plotting code
+              plots_row[[plot_name]] <- plot_trace
+            } else{
+              ## update last_plot() settings
+              set_last_plot(plot_trace)
+            }
+            
+
+            if(verbose) print("Plotting violin")
+            ## indicate plot name
+            plot_name <- "plot_violin"            
+            plot_curr <- plots_row[[plot_name]]            
+            if( (is.null(plot_curr) | render_plots_force) & render_plots) { ## Generate and append plot
+              ## Plotting code goes below here              
+              ## Plot violin plots of posterior values
+              ## Based on: https://cran.r-project.org/web/packages/bayesplot/vignettes/plotting-mcmc-draws.html#n_chains <-
+              fit_array <- as.array(fit_stan_rename)
+              if(FALSE) { ## use violin plots
+                plot_tmp <- mcmc_violin(fit_array, pars = c("lp_"), probs = c(0.1, 0.5, 0.9))
+              } else { # use histograms
+                plot_tmp <- mcmc_hist_by_chain(fit_array, pars = c("lp_")) #, color_chains = TRUE)
+              }
+              plot_violin <- plot_tmp +
+                yaxis_ticks(on = TRUE) +
+                yaxis_text(on = TRUE) +
+                ggtitle(desc_short)
+              ## Finish plotting code
+              plots_row[[plot_name]] <- plot_violin
+            } else{
+              ## update last_plot() settings
+              set_last_plot(plot_violin)
+            }
+
+            
+            plot_trace_and_violin <- plot_grid(plotlist = list(plot_trace, (plot_violin + ggtitle(NULL))),
+                                               ncol = 1,
+                                               rel_heights=c(0.3, 1))
+            if(save_plots_file) last_plot_save(file_prefix = "trace-and-violin")
+            if(display_plots) print(last_plot())
+
+            ## Count occurence of each male in model fit_brms
+            ## This is used to control plotting
+            male_instance <- sapply(male_vec, function(x) {sum(str_detect(x, string=vars_clean))})
+
+            if(render_hist) {
+              if(verbose) print("Plotting hist")
+              ## This one can be replace by plot_hex or scatter
+              plot_name <- "plot_hist"
+              plot_curr <- plots_row[[plot_name]]            
+              if( (is.null(plot_curr) | render_plots_force) & render_plots) { ## Generate and append plot
+                vars_fit <- names(fit_stan_rename) %>% na.omit(.) %>% sort(., decreasing = TRUE)
+                ncol <- 4
+                ## Plotting code goes below here              
+                plot_hist <-  stan_hist(fit_stan_rename,
+                                        pars = vars_fit,
+                                        bins = 30,
+                                        ncol = ncol) + 
+                  ggtitle(desc_short) +
+                  ## Reduce plot label size
+                  theme(plot.title = element_text(size = rel(1), face = "bold"))
+                ## Finish plotting code
+                plots_row[[plot_name]] <- plot_hist
+              } else{
+                ## update last_plot() settings
+                set_last_plot(plot_hist)
+              }
+              file_prefix <- sub("plot_", "", plot_name)                
+              if(save_plots_file) last_plot_save(file_prefix = file_prefix)            
+              if(display_plots) print(last_plot())
+            }
+            
+            # remove old scatter plots
+            # plots_row[["plot_scatter"]] <- NULL
+            if(render_hex) {
+              plot_name <- "plot_hex"
+              plot_curr <- plots_row[[plot_name]]            
+              if( (is.null(plot_curr) | render_plots_force) & render_plots) { ## Generate and append plot
+                print("Plotting Hex")
+                scatter_list <- list()
+
+                for(male in male_vec) {
+                  # print(male)
+                  vars_male <- grep(male, vars_T, value = TRUE)
+                  #                  mutate(x = gsub("T[0-9]{3}_","", x), y = gsub("T[0-9]{3}_","", y))
+                  if(length(vars_male) == 1) {
+                    ## include lp
+                    vars_male <- c(vars_male, "lp_")
+                    ylab <- "log(Posterior)"
+                  } else {
+
+                    if(length(vars_male) > 2) {
+                      print(
+                        paste0("WARNING: mcmc_hex can only work with 2 variables, but length(vars_male) = ",
+                               length(vars_male),
+                               "; vars_male = ",
+                               paste(vars_male),
+                               " Using only first two elements.",
+                               collapse = ","))
+                      vars_male <- vars_male[1:2]
+                    }
+                    
+                    ylab <- "y0"
+                    
+                  }
+                  
+                  scatter_tmp <-  mcmc_hex( #was mcmc_scatter
+                    fit_stan_rename,
+                    ## Can only use two variables
+                    pars = c(first(vars_male), last(vars_male)),
+                    ) +
+                      ##labs(x = "x0", y = ylab, title = male)
+                      labs(title = male)
+                  ## Add histograms to plot axes/margin
+                  ## ggMarginal doesn't work natively with mcmc_hex, so we need to make the
+                  ## points transparent and then add a hex layer
+                  scatter_list[[male]] <- ggExtra::ggMarginal(scatter_tmp +
+                                                                geom_point(col="transparent") +
+                                                                geom_hex() +
+                                                                theme(legend.position = "none"), type = "histogram")
+                  
+                }
+                
+                p <- plot_grid(plotlist = scatter_list,
+                               ncol = 3) #, legend = TRUE)
+                
+                title_row <- ggdraw() + draw_label(desc_short, fontface='bold', size = 10)
+                
+                plot_hex <- plot_grid(title_row, p, ncol = 1, rel_heights=c(0.1, 1))
+
+                ## Finish plotting code
+                plots_row[[plot_name]] <- plot_hex
+              } else {
+                ## update last_plot() settings
+                set_last_plot(plot_hex)
+              }
+              
+              file_prefix <- sub("plot_", "", plot_name)                
+              if(save_plots_file) last_plot_save(file_prefix = file_prefix)            
+              if(display_plots) print(last_plot())
+            }
+
+            if(render_pairs) {
+              ## plot_Pairs not that useful
+              ## Might want to flag off 
+              plot_name <- "plot_pairs"
+              plot_curr <- plots_row[[plot_name]]            
+              if( (is.null(plot_curr) | render_plots_force) & render_plots) { ## Generate and append plot
+                print("Plotting Pairs")
+                ## Pairs Plot
+                list_plot <- list()
+                if(model == "one_piece" & disp_flag != "individual") {
+                  ## each male only appears once in the one piece models
+                  splitby <- 3
+                  nsplits <- max(nmales %/% splitby, 1)
+                  tmp_stop <- (1:nsplits) * splitby
+                  tmp_start <- tmp_stop - (splitby - 1)
+                  for(i in 1:nsplits) {
+                    tmp_range <- tmp_start[[i]]:tmp_stop[[i]]
+                    list_plot[[i]] <- pairs(fit,
+                                            off_diag_fun = if_else(off_diag_fun == "hex", "hex", "scatter"),
+                                            variable = c(as.character(males[tmp_range]),
+                                                         "disp"),
+                                            regex = TRUE)
+                  }
+                  list_plot[[nsplits+1]] <- pairs(fit,
+                                                  variable = c("disp", "lprior", "lp_")
+                                                  )
+                } else { # not one_piece disp_flag != individual
+
+                  list_plot <- list()
+                  for(male in male_vec) {
+                    ##print(male);
+                    list_plot[[male]] <-
+                      pairs(fit,
+                            off_diag_fun = if_else(off_diag_fun == "hex", "hex", "scatter"),
+                            variable = c(male, "lp_"),
+                            regex = TRUE)
+                    
+                  }
+                  #ggtitle(desc_short)
+                }
+
+                #browser()
+                
+                ## Set number of males per row
+                ifelse(length(list_plot[[male]]) > 2, ncol_row <- 1, ncol_row <- 2)
+                ## Set number of rows/page
+                ifelse(length(list_plot[[male]]) > 2,
+                       ifelse(length(list_plot[[male]]) > 4,
+                              nrow_page <- 3,
+                              nrow_page <- 4),
+                       nrow_page <- 5)
+
+                ## Note this makes a list of plots
+                plot_pairs <- marrangeGrob(grobs = list_plot,
+                                           ncol = ncol_row,
+                                           nrow = nrow_page,
+                                           top = desc_short,
+                                           bottom = quote(paste("page", g, "of", npages))
+                                           )
+                ## plot_pairs <- cowplot::plot_grid(
+                ##   plotlist = list_plot,
+                ##   ncol = 2)
+                ## Finish plotting code
+                #set_last_plot(plot_pairs) ## Don'[t think marrangeGrob updates last_plot()
+                plots_row[[plot_name]] <- plot_pairs
+                
+              } else {
+                ## update last_plot() settings
+                set_last_plot(plot_pairs)
+              }
+              if(display_plots) print(plot_pairs); #dev.off()
+              file_prefix <- sub("plot_", "", plot_name)
+              ## Need to update following line since imarrangeGrob output isn't technically a plot
+              if(save_plots_file) last_plot_save(file_prefix = file_prefix)
+
+
+              ## update plots_row
+              fit_tbl[[ curr_row, "plots"]][[1]] <- plots_row
+            }
+              
+             #graphics.off()
+            # browser()
+            curr_row <- curr_row + 1
+            cat("\\clearpage")
+            
+          }  ## End disp_values
+        } ## end y0_flag
+      } ## end x0_flag
+    } ## end flag_disp
+  } ## end filter male
+} ## end model_used
+
+# rm("curr_row")
+```
+
+```{r}
+print(outfile_tbl)
+
+if(save_fits) save(fit_tbl, file = outfile_tbl)
+```
+
+
+## Exit rendering
+```{r}
+
+knitr::knit_exit()
+
+
+```

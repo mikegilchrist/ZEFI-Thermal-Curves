@@ -1,0 +1,544 @@
+---
+title: "Piecewise Regression with Negative Binomial Type I Error on Real Data using `brms` Custom Family"
+author: "Michael Gilchrist"
+date: "Created: 2023-02-28; Compiled: `r date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, }
+
+knitr::opts_chunk$set(
+  warning = TRUE, # show warnings
+  message = TRUE, # show messages
+  error = TRUE, # do not interrupt generation in case of errors,
+  echo = TRUE  # show R code
+)
+
+
+if(interactive()) {
+  default::default(.ess.eval) <- list(max.deparse.length=2E2, output = TRUE)
+  output_dir = "output"  
+} else { 
+  output_dir = "output/render"  
+}
+
+```
+# Goal
+
+- Fit two piece negative binomial type 1 formulation to data
+- From 2023-02-28 version of `nbinom_type1.R`
+
+> Negative Binomial distribution parameterized by mean (mu) and overdispersion parameter (theta).
+> This parameterization is referred to as NEGBIN type I (Cameron and Trivedi, 1998) as cited by
+> https://doi.org/10.1080/03610926.2018.1563164
+> ##
+> `x ~ nbinom_type1(mu, theta)`, where `E(x) = mu, Var(x) = (theta + 1) mu`
+> This should not be confused with the mu and shape parameterization of nbinom in R or the 'alternative' NB (`neg_binomial_2_...`) in stan
+> Note using disp instead of theta because using theta gives the error
+> > Error: Currently 'dirichlet' is the only valid prior for simplex parameters. See help(set_prior) for more details.
+> when trying to fit the model.
+
+
+## Recap
+
+- Code initially based on work in 
+- `../2022-12-20_rstan_two.piece.qpoisson.with.real.data/rstan_two.piece_fit.various.models.to.real.data.Rmd`
+- 
+- That model behaved well but, because I was writing stan code directly, I hadn't been able to group data by `male`
+- Since then, I've created a `brms` `custom_family()` which uses the Type 1 formulation of the NB. 
+
+## Insights
+
+- When the `disp` (dispersal or `theta`) gets unrealistically large, we get the emergence of a bimodal distribution at both ends of `x0` values.  
+Even though we included this value, it is very unlikely to be 25C values.
+I interpret this to mean that when things are really noisy (high `theta`), one way to interpret the data is that one set of males has a very long (presumably slow) decline.
+It would be good to look at the correlations via `pairs()`.
+- To me this is consistent with the infomal knowledge that the 
+
+### Reconciling use of `s0` with `x0`
+
+In an effort to udnerstand hte difference between earlier work with `rstan` and this current work with `brms`, it seems that the key difference is both approaches use an implicit flat prior and, thus, result in inconsistency.
+
+To understand this, I want to transform the flat prior on `s0` into the corresponding prior on `x0`.
+In order to do so, I am following`Proposition B` on p. 60 of Rice (1995) stats book.
+
+Specifically, if `s0 = 1/(xmax - x0)` such that `y = y0 * s0 * (xmax - max(x, x0))`
+
+Then,
+$f_{X0}(x0) = f_{s0}( g^{-1}(x0)) |\frac{d}{d x0} g^{-1}(x0)$ where
+
+- $g^{-1}(x0) = 1/(x_{\max} - x0) = s0$
+- $|\frac{d}{d x0} g^{-1}(x0)| = | \frac{d}{d x0}(1/(x_{\max} - x0)$
+  $ = |\frac{1}{(x_{\max} - x0)^2}| = \frac{1}{(x_{\max} - x0)^2}$
+- Assuming a flat prior means $f_{S0}(s0) = C$
+- Thus, given a flat prior on $s0$, the corresponding prior on $x0$ is $f(x0) = C \frac{1}{(x_{\max} - x0)^2}$ which is not what I expected since it favors higher values of $x0$
+- Structure of this prior is similar to a Cauchy distribution with $\gamma = 1$.
+
+# Set up
+
+## Install libraries
+
+```{r, message = FALSE}
+
+# install packages user might not have by replacing FALSE with TRUE
+
+## load libraries
+library(stats)
+library(MASS) # provides negative binomial fitting:  glm.nb
+library(ggplot2)
+library(ggpubr)
+library(grid)
+library(gridExtra)
+library(GGally)
+library(broom)
+library(tidyverse)
+library(viridisLite)
+library(cmdstanr)
+library(rstan)
+options(mc.cores = (parallel::detectCores()-2))
+rstan_options(auto_write = TRUE)
+library(brms)
+library(loo)
+
+
+## options(ggplot2.continuous.colour="viridis",
+##        ggplot2.discrete.colour="viridis",
+##        ggplot2.scale_fill_discrete = scale_fill_viridis_d,
+##        ggplot2.scale_fill_continuous = scale_fill_viridis_c)
+
+library(reshape2)
+library(lme4)
+library(latex2exp)
+
+```
+
+## Source family
+
+```{r}
+
+source("../../../custom-brms-families/families/nbinom_type1.R")
+```
+## Load Data
+
+```{r}
+sapply(file.path("input", dir("input")),
+       load, verbose = TRUE, envir = .GlobalEnv)
+
+
+head(stats_ind)
+names(stats_ind)
+
+head(data_ind)
+names(data_ind)
+
+
+```
+
+
+# Prior Work
+
+### Fit with Stan: Separate: `y0`, and `x0`, Pooled  $\theta$
+
+- Based on results in `../2022-12-20_rstan_two.piece.qpoisson.with.real.data/rstan_two.piece_fit.various.models.to.real.data.Rmd`
+- Histograms of `x0[]` suggest following groupings
+1. `c(2, 4, 6, 8, 11)`
+2. `c(1, 3, 5, 7, 10)`
+3. `9` is ambiguous.
+
+
+- NOTE: I'm not 100% sure these index values are the same as the ones we are using here!
+```{r}
+
+x0_groups_2_base <- list(low = c(2, 4, 6, 8, 11), high = c(1, 3, 5, 7, 10)) ## Does not include bird with index 9
+
+x0_groups_2a <- x0_groups_2b <- x0_groups_2_base
+
+x0_groups_2a$low <- c(x0_groups_2_base$low, 9) %>% sort()
+x0_groups_2b$high <- c(x0_groups_2_base$high, 9) %>% sort()
+
+
+```
+# Fit Models
+
+- Code derived from `../2023-02-23_brms_nb_focus.on.x0.fittings/nb_focus.on.estimating.x0.fittings.Rmd`
+
+
+
+## Set up functions, parameters, and results tibble 
+
+```{r}
+
+data_stan <- data_ind %>% rename(y = motif_count, x = temp) %>%
+  mutate(male = factor(male))
+
+xmax <- 46
+stan_two_piece_x0_func <- paste0(" real  two_piece(real x, real x0, real y0) {
+ real xmax = ", xmax, "; ## paste in value for xmax\n
+ return(y0 * (xmax - fmax(x0, x))/(xmax - x0));
+ } ")
+
+stan_two_piece_s0_func <- paste0(" real  two_piece(real x, real s0, real y0) {
+ real xmax = ", xmax, "; ## paste in value for xmax\n
+ real x0 = xmax - 1/s0;
+ real y = y0 * s0 * (xmax - fmax(x, x0));
+ return(y);
+ } ")
+
+
+models <- c("x0_piecewise", "s0_piecewise") #, "asymptotic")
+sampling_dists <- c("nbinom_type1") ##, "com_poisson") ## lognormal doesn't work since the counts can be 0.
+flags_x0 <- c("uniform_1",
+              "groups_1", ## this doesn't work with x0_Intercept prior, suggests error in priors
+              "groups_2a",
+              "groups_2b",
+              "individual")
+
+flags_y0 <- c("uniform_1", "groups_1", "individual")
+
+
+disp_prior_list <- c(0.25, 0.5, 2, 4, 8, 16, 32)
+
+N <- length(data)
+
+fit_tbl <- crossing(model = models,
+                    sampling_dist = sampling_dists,
+                    x0_flag = flags_x0, y0_flag = flags_y0,
+                    disp_prior = disp_prior_list,
+                    desc = "NA_character",
+                    y0_group_list = list(NA), #tbl_tmp, #list(NA),
+                    x0_group_list = list(NA),
+                    fit = list(NA),
+                    llik = list(NA),
+                    r_eff = list(NA),
+                    loo = list(NA)
+                    )
+
+
+```
+
+### Run fits
+
+```{r, message = FALSE }
+
+run_fits = TRUE
+force_load = FALSE  #reload fit_tbl even if it already exits
+save_fits = TRUE
+
+infile_tbl <- file.path(output_dir, paste0("fit_tbl_2023-03-08.Rda"))
+outfile_tbl <- file.path(output_dir, paste0("fit_tbl_", Sys.Date(), "-b.Rda"))
+
+
+sampling = "nbinom_type1"
+flag_category <- "individual_individual"
+
+flags_x0_used <- c("groups_1") #
+flags_y0_used <- c("individual")
+disp_prior_used <- disp_prior_list
+models_used <- c("s0_piecewise") #, "x0_piecewise")
+
+fit_index <- 0;
+
+for(model in models_used) {  
+    switch(model,
+#           "piecewise" = {stan_func <- stan_two_piece_x0_func},
+           "x0_piecewise" = {
+             stan_func <- stan_two_piece_x0_func
+             warmup <- 15000 #floor(3/4 * iter)
+             iter <- warmup + 10000
+             adapt_delta <- 0.8
+             thin <- 4
+           },
+           "s0_piecewise" = {
+             stan_func <- stan_two_piece_s0_func
+             warmup <- 15000
+             iter <- warmup + 10000
+             thin <- 4
+             adapt_delta <- 0.95             
+           }
+           )
+
+    print(model)
+    print(stan_func)
+    
+    for(x0_flag in flags_x0_used) {
+      s0_flag <- x0_flag ## define synonym
+      
+      for(y0_flag in flags_y0_used) {
+
+        print_get_prior <- TRUE ## reset value
+        print_prior_summary <- TRUE
+        
+      for(disp_prior in disp_prior_used) {
+
+          ## used when loading fits
+          fit_index <- fit_index + 1;
+          ## Set up variables for saving model and fit
+
+          desc_short <- paste0("x0 " , x0_flag, "; y0 ", y0_flag, "; disp prior ", disp_prior) 
+          desc <- paste0(sampling, "; ", model, "; ", desc_short)
+
+          filename_desc <- gsub("_", "-", desc) %>%
+              gsub("; ", "_", .) %>%
+              gsub(" ", "-", .)
+          
+          curr_row <- which(fit_tbl$model == model &
+                            fit_tbl$sampling_dist == sampling &
+                            fit_tbl$x0_flag == x0_flag &
+                            fit_tbl$y0_flag == y0_flag &
+                            fit_tbl$disp_prior == disp_prior)
+        fit_tbl[ curr_row, ]$desc <- desc
+
+        print(desc)
+
+        if(run_fits) {
+
+            
+            print("Fitting Models")
+              switch(sampling,
+                     "nbinom_type1"= {
+                         family <- nbinom_type1(link = "identity", link_disp = "log")
+                         adapt_delta <- adapt_delta #0.95 ## will decreasing value increase ESS? Seems like it
+                         iter <- iter
+                         warmup <- warmup
+                         thin <- thin
+                         n_cores <- 4 ## set to 1 if getting errors from stan in order to see relevant message.
+                         n_chains <- n_cores
+                         nbinom_type1_vars <-
+                             stanvar(scode = paste(
+                                         stan_func,
+                                         stan_nbinom_type1, sep = "\n"),
+                                     block = "functions")
+                     }
+         )
+
+          ## Refresh data in case x0_group or y0_group are all set to 1
+          data <- data_stan
+
+          print("Set flags based on fitted model structure")
+          if(x0_flag %in% c("uniform_1", "groups_1")) data <- mutate(data, x0_group = 1)
+          if(y0_flag %in% c("uniform_1", "groups_1")) data <-mutate(data, y0_group = 1)
+          if(x0_flag %in% c("individual")) data <- mutate(data, x0_group = male)
+          if(y0_flag %in% c("individual")) data <- mutate(data, y0_group = male)
+
+
+
+          ## Note we need to put a tibble into a list because row updates, even if doing
+          ## just one cell, require a list format.
+          ## Haven't defined "y0_group" or "x0_group" variables
+          if(FALSE) {
+            fit_tbl[[curr_row, "x0_group_list"]] <- list(unique(data[, c("male", "x0_group")]))
+            fit_tbl[[curr_row, "y0_group_list"]] <- list(unique(data[, c("male", "y0_group")]))
+          }
+          
+          print("Define parameter formulas")
+          x0_form <- switch(x0_flag,
+                            uniform_1 = formula(x0 ~ 1),
+                            uniform_2 = formula(x0 ~ x0_group),
+                            # Don't include x0_group info which is determined by the data set
+                            groups_1 = formula(x0 ~ 1 + (1|male)), 
+                            groups_2 = formula(x0 ~ (1|male) + x0_group),
+                            individual = formula(x0 ~ 0 + male) ## Do not use 1 + male!
+                            )
+          s0_form <- formula(deparse(x0_form) %>% gsub("x0", "s0", .))
+
+          
+          y0_form <- switch(y0_flag,
+                            uniform_1 = formula(y0 ~ 1),
+                            uniform_2 = formula(y0 ~ 1 + y0_group),
+                            groups_1 = formula(y0 ~ 1 + (1| male)), 
+                            groups_2 = formula(y0 ~ 1 + (1| male) + y0_group),
+                            individual = formula(y0 ~ 0 + male)
+                            ## `-1 + ` gives me the error:
+                            ## Warning in parallel::mclapply(1:chains, FUN = callFun, mc.preschedule = FALSE,  :
+                            ##  4 function calls resulted in an error
+                            ## Error in FUN(X[[i]], ...) : 
+                            ##  trying to get slot "mode" from an object (class "try-error") that is not an S4 object
+                            ## should I use `0 +` or `-1 +` ?
+                            )
+
+
+          threshold_form <- switch(model,
+                                     x0_piecewise = x0_form,
+                                     s0_piecewise = s0_form
+                                     )
+
+
+          
+          print("Define priors")
+          ## Strangely reducing the parameter of the exponential results in a higher estimate of 'disp' and increasing the parameter decreases the estimates of 'disp'
+          disp_priors <- set_prior(switch(5,
+                               paste0("exponential(", disp_prior, ")"), ## Similar to one used in earlier work with stan
+                               normal(15, 2.8), ## Based on analysis of non-noisy 40C song data
+                               normal(6, 2.8), ## Based on analysis of non-noisy 40C song data
+                               exponential(0.667), ## 0.625 = 1/16  "
+                               paste0("constant(", disp_prior, ")") ## Making disp a constant oesn't really help.
+                              ), class = "disp", lb = 0)
+
+          x0_prior <- switch(x0_flag,
+                              uniform_1 = NULL,
+                              uniform_2 = NULL,
+                              # Don't include x0_group info which is determined by the data set
+                              groups_1 = prior(student_t(3, 0, 66.7), lb = 0, ub = 3, class = "sd", nlpar = "x0"),
+                              groups_2 = NULL,
+                              individual = NULL
+                              )
+          
+          x0_priors <- x0_prior +
+            prior(uniform(25, 45), lb = 25, ub = 45, nlpar = "x0")
+
+          s0_prior <- switch(s0_flag,
+                              uniform_1 = NULL,
+                              uniform_2 = NULL,
+                              # Don't include x0_group info which is determined by the data set
+                              groups_1 = prior(student_t(3, 0, 66.7), lb = 0, ub = 0.3333, class = "sd", nlpar = "s0"),
+                              groups_2 = NULL,
+                              individual = NULL
+                              )
+
+          s0_priors <- s0_prior +
+            prior(uniform(0.02, 1), lb = 0.02, ub = 1, nlpar = "s0")
+          
+          y0_priors <- switch(y0_flag,
+                              uniform_1 = prior(normal(150, 100), nlpar = "y0"),
+                              uniform_2 = NULL,
+                              groups_1 = NULL,
+                              groups_2 = NULL,
+                              individual = prior(normal(150, 1000), nlpar = "y0", lb = 10, ub = 1000)
+                              )
+
+          threshold_priors <- switch(model,
+                                     x0_piecewise = x0_priors,
+                                     s0_piecewise = s0_priors
+                                     )
+                 
+          prior <- switch(sampling,
+                          "nbinom_type1" = {
+                            disp_priors +
+                              threshold_priors + y0_priors
+                          })
+          
+          nlform <- switch(model,
+                           x0_piecewise = bf(y ~ two_piece(x, x0, y0), nl = TRUE),
+                           s0_piecewise = bf(y ~ two_piece(x, s0, y0), nl = TRUE)
+                           ) +
+           threshold_form + 
+           y0_form
+
+
+          if(print_get_prior) {
+            print(get_prior(nlform,
+                            data = data,
+                            family = family
+                            ))
+            print_get_prior <- FALSE # will get reset
+          }
+            
+          save_model <-paste0(paste0(output_dir, "/stan/brms", model, sampling, x0_flag, y0_flag, disp_prior, sep = "_"), ".stan")
+          #make_stancode( .... save_model = save.model)
+          fit <- brm(nlform,
+                     data = data,
+                     ## `link` refers to the mapping of the expectation of the distribution: log, sqrt, identity, softplus
+                     ## link_shape corresponds to `phi` of `stan`'s
+                     ## Negbinomial_2
+                     ## Defining `phi = mu/theta` creates a quasipoisson
+                     ## distribution with overdispersion parameter (1 +theta)
+                     family = family, #negbinomial(link = "identity", link_shape = "identity"),
+                     prior = prior,
+                     stanvars = nbinom_type1_vars,
+                     iter = iter,
+                     warmup = warmup,
+                     thin = thin,
+                     silent = ifelse(interactive(), 1, 2), # 0, 1, or 2. 1 is default
+                     control = list(adapt_delta = adapt_delta,
+                                    max_treedepth = 12
+                                    ##model_name = desc ## Incorrect way to set this.
+                                    ),
+                     ## Only print out sampling progress if in interactive mode
+                     refresh = ifelse(interactive(),max(iter/5, 1), 0),
+                     chains = n_chains,
+                     cores = n_cores,
+                     save_model = save_model
+                     )
+
+          print(desc)
+          # print("Prior Information")
+          # print(prior_summary(fit))
+          print("Fit Information")
+          print(fit)
+          
+          #fit_exp <- expose_functions(fit) , vectorize = TRUE)
+          #fit_cr <- add_criterion(fit_exp, c("loo", "waic"))
+          fit_tbl[[curr_row, "fit"]] <- list(fit)
+          ## Print current warnings
+          warnings(summary)
+          ## Clear warnings()
+
+          ## End if(run_fit)
+        } else {
+          print("Working with Pre-existing Fits")
+
+                    
+          ## Try to assign from local memory.
+          fit <- fit_tbl[[curr_row, "fit"]][[1]]
+
+          ## Load fit if undefined or desired
+          if(is.na(list(fit)) | force_load) {
+            print("Loading Models")            
+            #if(fit_index ==1)
+            load(file = infile_tbl)
+            fit <- fit_tbl[[curr_row, "fit"]][[1]]
+          }
+        }
+
+        if(is.na(list(fit))) {
+          warning(paste0("model fit ", desc, "does not exist.\n Skipping."))
+        }else {
+          ## Print and plot results, regardless of which fits one uses           
+          print(desc)
+          if(print_prior_summary) {
+            print("Fit Prior Information")
+            print(prior_summary(fit)) # %>% filter(nlpar!="y0"))
+            print_prior_summary <- TRUE
+          }
+          print("Fit Information")
+          print(summary(fit)) #, pars = "x0*"))          %>% filter(nlpar!="y0"))
+          fit_stan <- fit$fit
+          #clean up variable names
+          fit_stan_rename <-
+            fit_stan %>%
+            setNames(gsub("b_", "", names(.)) %>%
+                       gsub("(x0|s0|y0)_male(T[0-9]{3})", "\\2_\\1", .) %>%
+                       gsub("__", "_", .) %>%
+                       gsub("r_male_(x0|s0|y0)\\[(T[0-9]{3}),Intercept\\]", "\\2_\\1_r", .) %>%
+                       gsub("\\.", " ", .))
+
+          ##
+          vars_fit <- names(fit_stan_rename) %>% na.omit(.) %>% sort(., decreasing = TRUE)
+          ncol <- 4 
+          hist <-  stan_hist(fit_stan_rename,
+                             pars = vars_fit,
+                             bins = 30,
+                             ncol = ncol) +
+            ggtitle(desc_short)
+          print(hist)
+          filename <- paste0("histogram_", filename_desc, ".pdf")
+          ggsave(filename = filename, path = file.path(output_dir, "figures"), dpi=300)
+        }
+         #end else for fitting
+      }
+    }
+  }
+}
+
+print(outfile_tbl)
+
+if(save_fits) save(fit_tbl, file = outfile_tbl)
+```
+
+
+## Exit rendering
+```{r}
+
+knitr::knit_exit()
+
+```

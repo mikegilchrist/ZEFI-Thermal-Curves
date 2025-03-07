@@ -1,0 +1,693 @@
+---
+title: "Piecewise Regression with Negative Binomial Type I Error on Real Data using `brms` Custom Family"
+author: "Michael Gilchrist"
+date: "Created: 2023-04-05; Compiled: `r date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, }
+
+knitr::opts_chunk$set(
+  warning = TRUE, # show warnings
+  message = TRUE, # show messages
+  error = TRUE, # do not interrupt generation in case of errors,
+  echo = TRUE  # show R code
+)
+
+
+## Set font size for PDF
+## Taken from: https://stackoverflow.com/a/70016800/5322644
+## DOESN"T WORK
+#def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+#knitr::knit_hooks$set(chunk = function(x, options) {
+#  x <- def.chunk.hook(x, options)
+#  paste0("\n \\", "\\small","\n\n", x, "\n\n \\normalsize")
+#})
+
+
+if(interactive()) {
+  default::default(.ess.eval) <- list(max.deparse.length=2E2, output = TRUE)
+  output_dir <- "output"  
+} else { # keep knitted output separate
+  output_dir = file.path("output", "render")
+}
+
+output_dir_list <- file.path(output_dir, c("tibbles", "stan", "figures", "cmdstanr"))
+lapply(output_dir_list, dir.create, showWarnings = FALSE, recursive = TRUE, mode = "0777")
+
+options(max.print = 500)
+
+```
+# Goal
+
+- Fit two piece negative binomial type 1 formulation to *all* data
+- Decide how to categorize males in terms of their `disp` values (e.g. `uniform_2`)
+- Started by copying
+- `2023-03-18_fit.real.data.using.nbinom_type1-vary.disp/brms_one.piece.two.piece.asymp_fit.nbionm_type1.Rmd`
+
+
+## Recap
+
+- Working with 
+  - `nbinom_type1` with 
+    - change in variable term included in calculation
+    - `prep$ndraws` in posterior predict funcdtion
+  - all males, at least initially
+  
+## Insights
+
+- When the `disp` (dispersal or `theta`) gets unrealistically large, we get the emergence of a bimodal distribution at both ends of `x0` values.  
+Even though we included this value, it is very unlikely to be 25C values.
+I interpret this to mean that when things are really noisy (high `theta`), one way to interpret the data is that one set of males has a very long (presumably slow) decline.
+It would be good to look at the correlations via `pairs()`.
+- To me this is consistent with the infomal knowledge that the 
+- Two males have fitting issues, "T235" and "T236".
+  This appears to be due to a bimodal posterior surface where one region has low 'x0' (< 40C), but low 'y0', ane the other has a high `x0` and low `y0` 
+
+
+# Set up
+
+## Install libraries
+
+```{r, message = FALSE}
+
+## load libraries
+library(MASS) # provides negative binomial fitting:  glm.nb
+library(stats)
+library(tidyverse)
+library(brms)
+library(loo)
+library(ggplot2)
+#library(tidybayes)
+library(ggpubr)
+library(grid)
+library(gridExtra)
+library(ragg)
+library(GGally)
+library(cowplot)
+
+ggplot2::theme_set(theme_default(base_size = 10))
+#ggplot2::theme_set(theme_default(plot.background = element_rect(color = "black")))
+
+library(broom)
+library(viridisLite)
+library(cmdstanr)
+library(rstan)
+options(mc.cores = (parallel::detectCores()-2))
+rstan_options(auto_write = TRUE)
+
+## options(ggplot2.continuous.colour="viridis",
+##        ggplot2.discrete.colour="viridis",
+##        ggplot2.scale_fill_discrete = scale_fill_viridis_d,
+##        ggplot2.scale_fill_continuous = scale_fill_viridis_c)
+
+library(reshape2)
+library(lme4)
+library(latex2exp)
+
+```
+
+## Source family
+
+```{r}
+source("../../../custom-brms-families/families/nbinom_type1.R")
+```
+## Load Data
+
+```{r}
+sapply(file.path("input", dir("input")),
+       load, verbose = TRUE, envir = .GlobalEnv)
+
+head(motif_data_full)
+names(motif_data_full)
+
+```
+
+## Determine reasonable priors for y0
+
+- Previously concluded a flat prior makes the most sense.
+  See file this one was copied form for more details.
+  
+
+# Fit Models
+
+- `2023-03-18_fit.real.data.using.nbinom_type1-vary.disp/brms_one.piece.two.piece.asymp_fit.nbionm_type1.Rmd`
+
+
+## Set up functions, parameters, and results tibble 
+
+```r
+
+## Previously used `motif_data` which had been filtered.
+data_stan <- motif_data_full %>% rename(y = motif_count, x = temp) %>%
+  mutate(male = factor(male))
+males <- unique(data_stan$male)
+nmales <- length(males)
+
+xmax <- 46 # maximum value for x0
+    
+stan_two_piece_func <- paste0(" real  two_piece(real x, real x0, real y0) {
+ real xmax = ", xmax, "; ## paste in value for xmax\n
+ real y;
+
+ if(x0 > xmax) {
+    y = log(0);
+ } else {
+    y = y0 * (xmax - fmax(x0, x))/(xmax - x0);
+ }
+ return(y);
+ } ")
+
+stan_asymptotic_func <- paste0(" real  asymp(real x, real phi, real y0) {
+ real xmax = ", xmax, "; ## paste in value for xmax\n
+ return(y0 * (1 - exp( - phi * (xmax - x))) );
+ } ")
+
+## Function to drop chains, such as those that get stuck on a suboptimal posterior peak
+## Taken from:
+remove_chains <- function(brm_fit, chains_to_drop) {
+  # brm_fit is the output of brms::brm
+
+  sim <- brm_fit$fit@sim  # Handy shortcut
+  sim$samples <- sim$samples[-chains_to_drop]
+  
+  # Update the meta-info
+  sim$chains <- sim$chains - length(chains_to_drop)
+  sim$warmup2 <- sim$warmup2[-chains_to_drop]
+  
+  # Add the modified sim back to x
+  brm_fit$fit@sim <- sim
+  brm_fit
+}
+## Function to find row(s) in tbl that match criteria
+
+which_tbl_row <- function(filter_male = FALSE, x0_flag = "individual", y0_flag = "individual", disp_flag = "uniform_1", disp_value = 0.01, model = "two_piece", tbl = fit_tbl) {
+  which( tbl$filter_male %in% filter_male & 
+          tbl$x0_flag %in% x0_flag &
+          tbl$y0_flag %in% y0_flag &
+          tbl$disp_flag %in% disp_flag &
+          tbl$disp_value %in% disp_value &
+          tbl$model %in% model
+          # tbl$sampling_dist %in% sampling &
+        )
+}
+
+```
+
+
+## Set up Dataframe for fit results
+```{r}
+
+
+models <- c("one_piece", "two_piece", "asymptotic")[2:3] #, "one_piece") #, "asymptotic")
+sampling_dists <- c("nbinom_type1") ##, "com_poisson") ## lognormal doesn't work since the counts can be 0.
+flags_x0 <- c("uniform_1",
+              "uniform_2a",
+              "uniform_2b",
+              "groups_1", ## this doesn't work with x0_Intercept prior, suggests error in priors
+              "groups_2a",
+              "groups_2b",
+              "individual")
+
+flags_y0 <- c("individual")
+
+values_disp <- switch(1,
+                      c(0.01), # 0.125 is a good value
+                      c(0.01, 0.1), #, 0.25), # used in exploring model behavior
+                      list(0.1, "flat"), #, 0.1, 1) # doesn't work yet
+                      c("flat"))
+
+flags_disp <- c("uniform_1", "uniform_2", "groups_1", "individual")
+
+
+## whether to filter males with large disp values estimated using one piece model
+filter_male <- c(TRUE, FALSE)
+
+N <- length(data)
+
+fit_tbl <- crossing(model = models,
+                    #sampling_dist = sampling_dists,
+                    x0_flag = flags_x0,
+                    y0_flag = flags_y0,
+                    disp_value = values_disp,
+                    disp_flag = flags_disp,
+                    desc = "NA_character",
+                    filter_male = filter_male,
+                    #y0_group_list = list(NA), #tbl_tmp, #list(NA),
+                    x0_group_list = list(NA),
+                    fit = list(NA),
+                    llik = list(NA),
+                    r_eff = list(NA),
+                    loo = list(NA)
+                    )
+
+
+```
+
+
+### Run fits
+
+```{r, message = FALSE }
+
+run_fits <- TRUE
+force_load <- FALSE  #reload fit_tbl even if it already exits
+save_fits <- TRUE
+
+
+if(run_fits) {
+  infile_tbl <- NULL
+  cur_time <- gsub(" ", "_", Sys.time()) %>% gsub(":", ".", .)
+  outfile_tbl <- file.path(output_dir, "tibbles", paste0("fit_tbl_", cur_time, ".Rda"))
+} else {
+  infile <- last(dir(file.path(output_dir, "tibbles"), "fit_tbl.*"))
+  infile_tbl <- file.path(output_dir, "tibbles", infile)
+  outfile_tbl <- NULL
+}
+
+
+
+sampling = "nbinom_type1"
+prior_shape_y0 = "flat"
+
+flags_x0_used <- c("individual", "uniform_1") %>% rev()#
+flags_y0_used <- c("individual")
+values_disp_used <- values_disp
+flags_disp_used <- c("individual", "groups_1", "uniform_1")[c(1,2)] #  |> rev() |> first()
+models_used <- c("two_piece", "asymptotic")[1] 
+shape_y0_prior <- "flat" # flat or normal
+
+## These males produce bimodial posteriors and interfere with model fitting
+## Ideally, we'd do a preliminary analysis without them and then include them later.
+
+male_exclude = c("T235", "T236")
+
+fit_index <- 0
+
+for(male_filter in c(FALSE, TRUE)) {
+    for(model in models_used) {
+
+        print(model)
+        switch(model,           
+               two_piece = {
+                   ## Note issues in non-convergence are related to bimodality of posterior surface.
+                   stan_func <- stan_two_piece_func
+                   warmup <- 3000 # floor(3/4 * iter)
+                   iter <- warmup + 2000
+                   adapt_delta <- 0.99
+                   thin <- 4
+               },
+               asymptotic = {
+                   stan_func <- stan_asymptotic_func
+                   warmup <- 2000
+                   iter <- warmup + 2000
+                   thin <- 4
+                   adapt_delta <- 0.9
+               }
+               
+               )
+        for(disp_flag in flags_disp_used) {  
+
+            print(stan_func)
+            
+            for(x0_flag in flags_x0_used) {
+                
+                for(y0_flag in flags_y0_used) {
+
+                    ## define variable for labeling figures
+                    x0_label <- ifelse(model == "one_piece", "NA", x0_flag)
+                    
+
+
+                    print_get_prior <- TRUE ## reset value
+                    print_prior_summary <- TRUE
+                    
+                    for(disp_value in values_disp_used) {
+
+                        ## used when loading fits
+                        fit_index <- fit_index + 1
+                        ## Set up variables for saving model and fit
+
+                        desc_short <- paste0("x0: " , x0_label, "; y0: ", y0_flag, "; disp_flag: ", disp_flag, "; disp prior: ", disp_value, "; filter: ", male_filter)
+                        desc <- paste0(sampling, "; ", model, "; ", desc_short)
+
+                        filename_desc <- gsub("_", "-", desc) %>%
+                            gsub("; ", "_", .) %>%
+                            gsub(":? ", "-", .)
+
+                                        #stan_model_name <- sub(filename_desc, "_disp-prior-[0-9.]+_filter", "_filter")
+                        stan_model_name <- filename_desc #sub("_disp-prior-[0-9.]+_", "_", filename_desc)
+                        
+                        curr_row <- which_tbl_row(male_filter,
+                                                  x0_flag,
+                                                  y0_flag,
+                                                  disp_flag,
+                                                  disp_value,
+                                                  model,
+                                                  fit_tbl)
+                        
+                        fit_tbl[ curr_row, ]$desc <- desc
+
+                        print(desc)
+
+                        if(run_fits) {
+
+                            print("Fitting Models")
+                            switch(sampling,
+                                   "nbinom_type1"= {
+                                       family <- nbinom_type1(link = "identity", link_disp = "identity")
+                                       adapt_delta <- adapt_delta #0.95 ## will decreasing value increase ESS? Seems like it
+                                       iter <- iter
+                                       warmup <- warmup
+                                       thin <- thin
+                                       n_cores <- 6 ## set to 1 if getting errors from stan in order to see relevant message.
+                                       n_chains <- n_cores
+                                       stanvar_func <-
+                                           stanvar(scode = paste(
+                                                       stan_func,
+                                                       stan_nbinom_type1, sep = "\n"),
+                                                   block = "functions")
+                                   }
+                                   )
+
+                            ## Refresh data in case x0_group or y0_group are all set to 1
+                            data <- data_stan
+                            if(male_filter) data <- data %>% filter(!(male %in% male_exclude))
+
+                            males_used <- unique(data$male)
+                            
+                            if(model == "one_piece") data <- data %>% filter(x < xignore)
+
+
+                            print("Set flags based on fitted model structure")
+                            if(x0_flag %in% c("uniform_1", "groups_1")) data <- mutate(data, x0_group = 1)
+                            if(y0_flag %in% c("uniform_1", "groups_1")) data <-mutate(data, y0_group = 1)
+                            if(x0_flag %in% c("individual")) data <- mutate(data, x0_group = male)
+                            if(y0_flag %in% c("individual")) data <- mutate(data, y0_group = male)
+
+
+
+                            ## Note we need to put a tibble into a list because row updates, even if doing
+                            ## just one cell, require a list format.
+                            ## Haven't defined "y0_group" or "x0_group" variables
+                            if(FALSE) {
+                                fit_tbl[[curr_row, "x0_group_list"]] <- list(unique(data[, c("male", "x0_group")]))
+                                fit_tbl[[curr_row, "y0_group_list"]] <- list(unique(data[, c("male", "y0_group")]))
+                            }
+                            
+                            print("Define parameter formulas")
+                            x0_form <- switch(x0_flag,
+                                              uniform_1 = formula(x0 ~ 0 + Intercept),
+                                              uniform_2 = formula(x0 ~ 0 + x0_group),
+                                              ## `0 + Intercept` avoids prior being defined on centered data
+                                              groups_1 = formula(x0 ~ 0 + Intercept + (1|male)), 
+                                              groups_2 = formula(x0 ~ 0 + Intercept + (1|male) + x0_group),
+                                              individual = formula(x0 ~ 0 + male) ## Do not use 1 + male!
+                                              )
+
+                            phi_form <- formula(deparse(x0_form) %>% gsub("x0", "phi", .))
+
+                            y0_form <- switch(y0_flag,
+                                              uniform_1 = formula(y0 ~ 0 + Intercept),
+                                              ## `0 + Intercept` avoids prior being defined on centered data
+                                              uniform_2 = formula(y0 ~ 0 + y0_group),
+                                              groups_1 = formula(y0 ~ 0 + Intercept + (1| male)), 
+                                              groups_2 = formula(y0 ~ 0 + (1| male) + y0_group),
+                                              individual = formula(y0 ~ 0 + male)
+                                              ## `-1 + ` gives me the error:
+                                              ## Warning in parallel::mclapply(1:chains, FUN = callFun, mc.preschedule = FALSE,  :
+                                              ##  4 function calls resulted in an error
+                                              ## Error in FUN(X[[i]], ...) : 
+                                              ##  trying to get slot "mode" from an object (class "try-error") that is not an S4 object
+                                              ## should I use `0 +` or `-1 +` ?
+                                              )
+
+                            threshold_form <- switch(model,
+                                                     two_piece = x0_form,
+                                                     one_piece = NULL,
+                                                     asymptotic = phi_form
+                                                     )
+
+
+                            disp_form <- switch(disp_flag,
+                                                uniform_1 = NULL, #formula(disp ~ 1),
+                                                groups_1 = formula(disp ~ 0 + Intercept + (1|male)),
+                                                individual = formula(disp ~ 0 + male)
+                                                )
+
+                            nlform <- switch(model,
+                                             two_piece = bf(y ~ two_piece(x, x0, y0), nl = TRUE),
+                                             one_piece = bf(y ~ one_piece(y0), nl = TRUE),
+                                             asymptotic = bf(y ~ asymp(x, phi, y0), nl = TRUE)
+                                             ) +
+                                threshold_form +
+                                disp_form +
+                                y0_form
+
+
+                            
+                            print("Define priors")
+
+                                        # pass disp_value via stanvar argument
+                            stanvar_prior <- stanvar(disp_value, name = "disp_value")
+                            
+                            prior_string <- if(disp_value == "flat") {
+                                                "uniform(0, 20)"
+                                            } else {
+                                        # encode non-flat prior here, which force recompling when disp_value changes
+                                        #paste0("exponential(", disp_value, ")")
+                                        # pass disp_value via stanvar argument
+                                        # Allows disp_value to be changed w/o recompiling
+                                                "exponential(disp_value)" 
+                                            }
+                            
+                            ## x0 only used in two_piece model
+                            x0_prior <- switch(x0_flag,
+                                               uniform_1 = NULL,
+                                               uniform_2 = NULL,
+                                               groups_1 = prior(student_t(3, 0, 66.7), lb = 0, ub = 10, class = "sd", nlpar = "x0"),
+                                               groups_2 = NULL,
+                                               individual = NULL
+                                               )
+                            
+                            x0_priors <- prior(uniform(32, 44.5), lb = 32, ub = 44.5, nlpar = "x0") + x0_prior
+
+                            phi_priors <- prior(uniform(0.1, 100), lb = 0.01, ub = 17, nlpar = "phi")
+                            
+                            y0_priors <- switch(prior_shape_y0,
+                                                ## Values based on calculations at top of file using `temp_threshold`,
+                                                normal = prior(normal(125, 500), nlpar = "y0", lb = 10, ub = 1000), 
+                                        # flat prior
+                                        # - consistent with fact we're working with motifs, not songs
+                                        # - avoids bimodal posterior sampling issues with T235 and 236
+                                                flat =  prior(uniform(10, 1000), nlpar = "y0", lb = 10, ub = 1000) 
+                                                
+                                                )
+
+                            threshold_priors <- switch(model,
+                                                       two_piece = x0_priors,
+                                                       one_piece = NULL,
+                                                       asymptotic = phi_priors
+                                                       )              
+
+                            disp_priors <- switch(disp_flag,
+                                                  uniform_1 = set_prior(prior_string, class = "disp", lb = 0, ub = 20), # Form when disp ~ 1: set_prior(prior_string, class = "Intercept", dpar = "disp", lb = 0, ub = 20), Model runs slow, likely need disp ~ 0 + Intercept
+                                                  uniform_2 = NULL,
+                                                  groups_1 = set_prior(prior_string,
+                                                                       class = "b", dpar = "disp", lb = 0, ub = 20) +
+                                                      set_prior("uniform(0.1, 5)", class = "sd", dpar = "disp", lb = 0.4, ub = 5),
+                                                  groups_2a = NULL,
+                                                  groups_2b = NULL,
+                                                  individual = set_prior(prior_string,
+                                                                         dpar = "disp", lb = 0, ub = 20)
+                                                  
+                                                  )
+
+                            prior <- switch(model,
+                                            one_piece = {
+                                                y0_priors + disp_priors
+                                            },
+                                            threshold_priors + y0_priors + disp_priors
+                                            )
+
+                            if(print_get_prior) {
+                                tmp <- get_prior(nlform,
+                                                 data = data,
+                                                 family = family
+                                                 )
+                                print(tmp,
+                                      max.print = 500)
+                                print_get_prior <- FALSE # will get reset
+                            }
+                            
+                            stan_code <- file.path(output_dir,
+                                                   "stan", "code", paste0(stan_model_name, ".stan"))
+                                        #make_stancode( .... save_model = stan_code)
+                            
+                            fit <- brm(nlform,
+                                       data = data,
+                                       ## `link` refers to the mapping of the expectation of the distribution: log, sqrt, identity, softplus
+                                       ## link_shape corresponds to `phi` of `stan`'s
+                                       ## Negbinomial_2
+                                       ## Defining `phi = mu/theta` creates a quasipoisson
+                                       ## distribution with overdispersion parameter (1 +theta)
+                                       family = family, #negbinomial(link = "identity", link_shape = "identity"),
+                                       prior = prior,
+                                       stanvar = stanvar_func + stanvar_prior, ## pass prior values here
+                                       iter = iter,
+                                       warmup = warmup,
+                                       thin = thin,
+                                       silent = ifelse(interactive(), 1, 2), # 0, 1, or 2. 1 is default
+                                       control = list(adapt_delta = adapt_delta,
+                                                      max_treedepth = 12
+                                                      ##model_name = desc ## Incorrect way to set this.
+                                                      ),
+                                       ## Ideally save model to avoid need to recompile
+                                       stan_model_args = list(
+                                           model_name = file.path(output_dir, "stan", "binary", stan_model_name)
+                                       ),
+                                        #sample_prior =  "no", ## note improper priors not sampled
+                                       ## Only print out sampling progress if in interactive mode
+                                       refresh = ifelse(interactive(),max(iter/5, 1), 0),
+                                       chains = n_chains,
+                                       cores = n_cores,
+                                       save_model = stan_code
+                                       )
+
+
+                            print("Prior Summary")
+                            print(prior_summary(fit))
+                            print("Fit Information")
+                            print(desc)
+                            print(fit)
+                            
+                                        #fit_exp <- expose_functions(fit) , vectorize = TRUE)
+                                        #fit_cr <- add_criterion(fit_exp, c("loo", "waic"))
+                            fit_tbl[[curr_row, "fit"]] <- list(fit)
+                            ## Print current warnings
+                            warnings(summary)
+                            ## Clear warnings()
+
+                            ## End if(run_fit)
+                        } else {
+                            print("Working with Pre-existing Fits")
+
+                            
+                            ## Try to assign from local memory.
+                            fit <- fit_tbl[[curr_row, "fit"]][[1]]
+
+                            ## Load fit if undefined or desired
+                            if(is.na(list(fit)) | force_load) {
+                                print("Loading Models")            
+                                        #if(fit_index ==1)
+                                load(file = infile_tbl)
+                                fit <- fit_tbl[[curr_row, "fit"]][[1]]
+                            }
+
+                            data <- fit$data
+                            males_used <- unique(data$male)
+
+                        }
+
+                        if(is.na(list(fit))) {
+                            warning(paste0("model fit ", desc, "does not exist.\n Skipping."))
+                        }else {
+                            ## Print and plot results, regardless of which fits one uses           
+                            print(desc)
+                            if(print_prior_summary) {
+                                print("Fit Prior Information")
+                                print(prior_summary(fit)) # %>% filter(nlpar!="y0"))
+                                print_prior_summary <- TRUE
+                            }
+                            print("Fit Information")
+                            print(summary(fit)) #, pars = "x0*"))          %>% filter(nlpar!="y0"))
+                            fit_stan <- fit$fit
+                                        #clean up variable names
+                            fit_stan_rename <-
+                                fit_stan %>%
+                                setNames(gsub("b_", "", names(.)) %>%
+                                         gsub("(x0|phi|y0)_male(T[0-9]{3})", "\\2_\\1", .) %>%
+                                         gsub("__", "_", .) %>%
+                                         gsub("r_male_(x0|phi|y0)\\[(T[0-9]{3}),Intercept\\]", "\\2_\\1_r", .) %>%
+                                         gsub("\\.", " ", .))
+
+                            ##
+                            vars_fit <- names(fit_stan_rename) %>% na.omit(.) %>% sort(., decreasing = TRUE)
+                            ncol <- 4 
+                            hist <-  stan_hist(fit_stan_rename,
+                                               pars = vars_fit,
+                                               bins = 30,
+                                               ncol = ncol) +
+                                ggtitle(desc_short)
+                            print(hist)
+                            filename <- paste0("histogram_", filename_desc, ".pdf")
+                            ggsave(filename = filename, path = file.path(output_dir, "figures"),
+                                   width = 8, height = 11, units = "in",
+                                   scale = 0.4,
+                                   dpi=300)
+
+                            list_plot <- list()
+                            if(model == "one_piece" & disp_flag != "individual") {
+                                ## each male only appears once in the one piece models
+                                splitby <- 3
+                                nsplits <- max(nmales %/% splitby, 1)
+                                tmp_stop <- (1:nsplits) * splitby
+                                tmp_start <- tmp_stop - (splitby - 1)
+                                for(i in 1:nsplits) {
+                                    tmp_range <- tmp_start[[i]]:tmp_stop[[i]]
+                                    list_plot[[i]] <- pairs(fit,
+                                                            variable = c(as.character(males[tmp_range]),
+                                                                         "disp"),
+                                                            regex = TRUE)
+                                }
+                                list_plot[[nsplits+1]] <- pairs(fit,
+                                                                variable = c("disp", "lprior", "lp__")
+                                                                )
+                            } else {
+                                list_plot <- list()
+                                for(male in males_used) {
+                                    ##print(male);
+                                    list_plot[[male]] <-
+                                        pairs(fit,
+                                              variable = c(male, "lp__"),
+                                              regex = TRUE)
+                                    
+                                }
+                                grid_plot <- cowplot::plot_grid(
+                                                          plotlist = list_plot,
+                                                          ncol = 2)
+                                        #ggtitle(desc_short)
+                                
+                                print(grid_plot)
+                                filename <- paste0("grid.plot_", filename_desc, ".png")
+                                ggsave(filename = filename, path = file.path(output_dir, "figures"),
+                                       device = agg_png, 
+                                       width = 8, height = 11, units = "in",
+                                       scale = 0.4,
+                                       dpi=300)
+                                
+                                        #            }
+                                        #end else for fitting
+                                
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+print(outfile_tbl)
+
+if(save_fits) save(fit_tbl, file = outfile_tbl)
+```
+
+
+## Exit rendering
+```{r}
+
+knitr::knit_exit()
+
+
+```
+
