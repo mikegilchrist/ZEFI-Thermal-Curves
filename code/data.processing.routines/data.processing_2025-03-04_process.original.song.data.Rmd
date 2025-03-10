@@ -172,7 +172,7 @@ song_data_full <- full_join(song_data_raw[[1]], song_data_raw[[2]]) %>%
     mutate(temp = if_else(is.na(temp_mean),
                           temp_target,
                           temp_mean)) %>%
-    ## Add column with total song_count for a given round
+    ## Add column with a male's total song_count for a given round
     group_by(male, round) %>%
     mutate(count_total_round = sum(song_count),
            n_obs_round = length(song_count),
