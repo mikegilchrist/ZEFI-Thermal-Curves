@@ -31,7 +31,7 @@ knitr::opts_chunk$set(
 
 ## load libraries
 library(stats)
-require(MASS) # provides negative binomial fitting:  glm.nb
+#require(MASS) # provides negative binomial fitting:  glm.nb, but select conflicts with dplyr
 library(tidyverse)
 library(ggplot2)
 library(ggpubr)
@@ -105,14 +105,14 @@ options(ggplot2.discrete.fill = "viridis")
 
 git_root <- system("git rev-parse --show-toplevel", intern=TRUE)
 output_dir <- "output"
-data_new <- read.csv(file.path(git_root, "data", "song", "motifs", "motif.data_2025-03-03.csv"))
+data_new <- read.csv(file.path(git_root, "data", "song", "motifs", "motif.data_2025-03-03.csv")) %>% tibble()
 ```
 
 ## Process New Detailed Song Data
 
 ```{r}
 
-detailed_motif_data <- data_new  |>
+motif_data_renamed <- data_new  |>
   rename(male = Male,
          date = Date,
          file = Clipped.File.Name,
@@ -129,19 +129,21 @@ detailed_motif_data <- data_new  |>
          male = str_replace(male, "_misc_motifs", "") ## filter later
          ) |>
     arrange(male, date, start_song) %>%
-    select(!end_song)  ## now redundant with info in length_song
+    dplyr::select(!end_song)  ## now redundant with info in length_song
 
+motif_data_detailed <- motif_data_renamed %>% filter(!(is.na(file) & is.na(start_song)))
+motif_data_misc <- motif_data_renamed %>% filter((is.na(file) & is.na(start_song)))
 ## Check if there are any disagreements between date and file columns
 try(
   if(
-  detailed_motif_data |>
+  motif_data_detailed |>
     mutate(
         date_file = str_replace(file, "T[0-9]+_([^_]+)_([^_]+)_([^_]+)_[0-9]+", "\\3-\\1-\\2")
     ) |>
 #  rowwise() |> 
     mutate(date_file = if_else(is.na(date_file), as.Date(NA), lubridate::ymd(date_file))
     ) |>  filter(date != date_file) |>
-  select(male, file, date_file, date) |>
+  dplyr::select(male, file, date_file, date) |>
     nrow() != 0) stop("Dates in file and date columns don't match!")
 )
 ```
@@ -150,9 +152,9 @@ try(
 
 ## Extract motif data assigned to songs
 ## Add trial and song index columns
-motif_data <- detailed_motif_data |>
-  filter(!(is.na(file))) |>
-  group_by(male) |>
+motif_data <- motif_data_detailed |>
+#  filter(!(is.na(file))) |>
+  group_by(male, date) |>
 #  mutate(trial = min_rank(date)) |>  # This doesn't work as expected because the same dates across songs are not merged
   mutate(song_index = row_number()) |>
   ungroup()
@@ -170,14 +172,15 @@ motif_summary <- motif_data |>
             motif_sd_length = sd(length_song/motifs),
             post_song_sum = sum(post_song_motif),
             post_song_freq = post_song_sum/motif_sum
-            )
+            ) %>%
+    replace(is.na(.), 0) %>% # Replace NAs with 0s
+    mutate(across(c("motif_sd", # Re-replace 0s in SD with NAs 
+                    "length_song_sd",
+                    "motif_sd_length"), 
+                  ~ifelse(.==0, NA, .)
+                  )
+           )
 
-
-#  mutate(index.song = str_extract(file, ".*_([0-9][0-9]?)$") #song index within a trial         
-         #) 
-
-nonsong_motif_data <- detailed_motif_data |>
-  filter((is.na(file)))
 
 ```
 
@@ -192,7 +195,7 @@ if(interactive()) {
 
 comment <- paste0("Data created using file data_processing_2025-03-03.Rmd on ", date()) 
 
-save_obj <- c("motif_data", "motif_summary", "nonsong_motif_data")
+save_obj <- c("motif_data", "motif_data_detailed", "motif_data_misc", "motif_summary", "nonsong_motif_data")
 
 
 ## Add comments

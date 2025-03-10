@@ -31,15 +31,30 @@ load(file.path("output", "data.processing_2025-03-04_process.original.song.data.
 trial_info <- song_data_full[ , c("male", "date", "trial_round", "temp_target", "temp_mean", "humidity_mean", "vpd", "chamber", "counter", "test_order", "mass")]
 
 ## Add trial information to motif data
-motif_trial_data <- left_join(motif_data, trial_info, by = c("male", "date"))
+motif_data_trial <- left_join(motif_data, trial_info, by = c("male", "date"))
 
 ## Add motif stats to song_data
 
-song_motif_stats_data <- left_join(song_data_full, motif_summary, by = c("male", "date"))
+song_motif_data_stats <- left_join(song_data_full, motif_summary, by = c("male", "date")) |>
+    relocate(song_count.y, .after="song_count.x") %>%
+    relocate(date, .before="song_count.x")
 
+write_csv(x=song_motif_data_stats, file = "song_motif_data_stats.csv")
+write_csv(x=motif_data_stats, file = "song_motif_data_stats.csv")
 ```
 
-
+## Plot Data
 ```{r}
+
+data <- song_motif_data_stats
+
+data %>% which(data$song_count.x==0) & which(data$song_count.y>0)
+
+data %>% filter(song_count.x==0 & song_count.y>0)
+
+gg <- ggplot(data = data, aes(song_count.x, song_count.y))
+
+gg + geom_point() +
+    geom_smooth(method='lm', formula= y~x)
 
 ```
