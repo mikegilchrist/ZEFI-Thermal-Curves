@@ -15,3 +15,5 @@ tmp*.pdf
 *.stan
 .DS_Store
 testing.Rda
+#*
+*~
