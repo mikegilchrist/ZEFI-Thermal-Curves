@@ -33,29 +33,7 @@ knitr::opts_chunk$set(
 library(stats)
 #require(MASS) # provides negative binomial fitting:  glm.nb, but select conflicts with dplyr
 library(tidyverse)
-library(ggplot2)
-library(ggpubr)
-library(grid) ## provides textGrob
-library(gridExtra)
-library(viridisLite)
-
-#options(ggplot2.continuous.colour="viridis",
-#        ggplot2.discrete.colour="viridis",
-#        ggplot2.scale_fill_discrete = scale_fill_viridis_d,
-#        ggplot2.scale_fill_continuous = scale_fill_viridis_c)
-
-library(GGally)
-#library(reshape2)
-#library(lme4)
-#library(nlme)
-#library(gnm)
-library(rsample) ## provides bootstraps()
-
-#library(RVAideMemoire) # provides overdisp.glmer()
-#library(humidity) ## provides VPD
-#library(weathermetrics)
-library(latex2exp)
-
+library(knitr)
 ```
 ## Local Functions
 
@@ -78,24 +56,6 @@ stringToSeconds <- Vectorize(
 
 ```
 
-## Plotting settings
-
-```{r}
-
-## From: https://data-se.netlify.app/2018/12/12/changing-the-default-color-scheme-in-ggplot2/
-
-theme_set(theme_minimal(base_size = 9))
-theme_update(
-    plot.title = element_text(size = rel(1.1)),
-    plot.subtitle = element_text(size = rel(1)))
-
-if(!exists("old_opts")) old_opts <- options()  # save old options
-
-options(ggplot2.continuous.colour="viridis")
-options(ggplot2.continuous.fill = "viridis")
-options(ggplot2.discrete.colour="viridis")
-options(ggplot2.discrete.fill = "viridis")
-
 
 ```
 
@@ -105,7 +65,7 @@ options(ggplot2.discrete.fill = "viridis")
 
 git_root <- system("git rev-parse --show-toplevel", intern=TRUE)
 output_dir <- "output"
-data_new <- read.csv(file.path(git_root, "data", "song", "motifs", "motif.data_2025-03-03.csv")) %>% tibble()
+data_new <- read.csv(file.path(git_root, "data", "song", "motifs", "merged.motif.data_2025-03-03.csv")) %>% tibble() 
 ```
 
 ## Process New Detailed Song Data
@@ -118,7 +78,7 @@ motif_data_renamed <- data_new  |>
          file = Clipped.File.Name,
          start_song = Timestamp.Start,
          end_song = Timestamp.End,
-         motifs = Number.of.Motifs,
+         motif = Number.of.Motifs,
          post_song_motif = Any.motifs.after..5.gap,
          notes = Other.notes) |>
   mutate(date = lubridate::mdy(date),
@@ -138,9 +98,12 @@ motif_data_renamed <- data_new  |>
     #dplyr::select(!song_end) %>%  ## now redundant with info in song_length
     identity()
 
-motif_data_detailed <- motif_data_renamed %>% filter(!(is.na(file) & is.na(song_start)))
+motif_data_detailed <- motif_data_renamed %>% filter(!(str_detect(male, "_misc_motifs")))
+
 motif_data_misc <- motif_data_renamed %>%
-    mutate(male = str_replace(male, "_misc_motifs", "") ) #filter((is.na(file) & is.na(song_start)))
+    filter(str_detect(male, "_misc_motifs")) %>% 
+    mutate(male = str_replace(male, "_misc_motifs", ""),
+           motif_misc = motif) #filter((is.na(file) & is.na(song_start)))
 ## Check if there are any disagreements between date and file columns
 try(
   if(
@@ -157,36 +120,43 @@ try(
 ## Add trial and song index columns
 motif_data <- motif_data_detailed |>
     ##  filter(!(is.na(file))) |>
+    arrange(male, date, song_start) %>%
     group_by(male, date) |>
     ##  mutate(trial = min_rank(date)) |>  # This doesn't work as expected because the same dates across songs are not merged, but treated as instances, so the same date is counted many times with the same ranking
     mutate(song_index = row_number()) |>
     ungroup() |>
-    select(!c(start_song, end_song, date_file)) |>
+    select(!c(start_song, end_song, date_file)) |> # start/end_song replaced by song_start/end
     relocate(c(file, post_song_motif, notes), .after=last_col()) |>
     relocate(c(song_index), .before=song_length) |>
     relocate(c(song_start, song_end), .after=song_length) |>
-    arrange(desc(song_length))
+#    arrange(desc(song_length)) %>%
+    identity()
 
 motif_wrong <- motif_data %>% filter(song_length > 14) %>% arrange(date, file)
 motif_wrong_file <- filter(data_new, Clipped.File.Name %in% motif_wrong$file)
 
-write_csv(motif_wrong_file, file = "need.checking_2025-03-10.csv")
+if(length(motif_wrong)) write_csv(motif_wrong_file, file = "need.checking_2025-03-10.csv")
           
  
 ## Summarize song and within song motif data
 motif_summary <- motif_data |>
   group_by(male, date) |>
-  summarize(song_count = max(song_index),
-            motif_sum = sum(motifs),
-            motif_sd = sd(motifs),
-            motif_mean = mean(motifs),
+    summarize(song_count = if_else(sum(motif) > 0, max(song_index), 0),
+              song_motif_sum = sum(motif),
+            song_motif_mean = mean(motif),
+            song_motif_sd = sd(motif),
             song_length_sum = sum(song_length),
             song_length_sd = sd(song_length),
-            motif_length_mean = song_length_sum/motif_sum,
-            motif_length_sd = sd(song_length/motifs),
+            song_motif_length_mean = mean(song_length/motif),
+            song_motif_length_sd = sd(song_length/motif),
             post_song_sum = sum(post_song_motif),
-            post_song_freq = post_song_sum/motif_sum
-            )
+            post_song_freq = post_song_sum/song_motif_sum
+            ) %>% 
+    left_join(motif_data_misc) %>% 
+    mutate(motif_misc = if_else(is.na(motif_misc), 0, motif_misc)) %>%
+    mutate(motif_count = song_motif_sum +  motif_misc, .before = song_count) %>%
+    identity()
+
 
 
 #%>%
@@ -212,7 +182,7 @@ if(interactive()) {
 
 comment <- paste0("Data created using file data_processing_2025-03-03.Rmd on ", date()) 
 
-save_obj <- c("motif_data", "motif_data_detailed", "motif_data_misc", "motif_summary", "nonsong_motif_data")
+save_obj <- c("motif_data", "motif_data_detailed", "motif_data_misc", "motif_summary")
 
 
 ## Add comments

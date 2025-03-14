@@ -32,7 +32,7 @@ knitr::opts_chunk$set(
 
 ## load libraries
 library(stats)
-require(MASS) # provides negative binomial fitting:  glm.nb
+#require(MASS) # provides negative binomial fitting:  glm.nb
 library(tidyverse)
 
 ```
@@ -59,7 +59,9 @@ clipped_file_name_fix <- data_fixes$Clipped.File.Name
 data_flawed |>
     filter( !(Clipped.File.Name %in% clipped_file_name_fix)) -> data_tmp
 
-data <- bind_rows(data_fixes, data_tmp)
+data <- bind_rows(data_fixes, data_tmp) %>%
+    arrange(Male, Date, Clipped.File.Name) %>%
+    identity()
 
 write_csv(data, file = file.path(git_root, "data", "song", "motifs", "motif.data_2025-03-03.csv"),
           quote="needed"
