@@ -37,7 +37,11 @@ motif_data_trial <- left_join(motif_data, trial_info, by = c("male", "date"))
 
 song_motif_data_stats <- left_join(song_data_full, motif_summary, by = c("male", "date")) |>
     relocate(song_count.y, .after="song_count.x") %>%
-    relocate(date, .before="song_count.x")
+    relocate(date, .before="song_count.x") %>%
+    mutate(song_count.y = if_else(is.na(song_count.y), 0, song_count.y),
+           motif_sum = if_else(is.na(motif_sum), 0, motif_sum)
+           )
+           
 
 write_csv(x=song_motif_data_stats, file = "song_motif_data_stats.csv")
 write_csv(x=motif_data_stats, file = "song_motif_data_stats.csv")
@@ -48,7 +52,13 @@ write_csv(x=motif_data_stats, file = "song_motif_data_stats.csv")
 
 data <- song_motif_data_stats
 
-data %>% which(data$song_count.x==0) & which(data$song_count.y>0)
+not_equal_count <- which(data$song_count.x!=data$song_count.y)
+too_few_motifs <- which(data$motif_sum < data$song_count.y)
+
+data[not_equal_count, c("song_count.x", "song_count.y", "motif_sum")] |> print(n=150)
+data[too_few_motifs, c("song_count.x", "song_count.y", "motif_sum")] |> print(n=150)
+
+which(data$song_count.x==0 & data$song_count.y>0)
 
 data %>% filter(song_count.x==0 & song_count.y>0)
 

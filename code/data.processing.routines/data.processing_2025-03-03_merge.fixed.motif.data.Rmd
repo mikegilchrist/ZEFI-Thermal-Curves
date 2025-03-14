@@ -20,6 +20,7 @@ knitr::opts_chunk$set(
 # Goal
 
 - Merge updated motif data into pre-existing dataset.
+- Updated 2025-03-12 to use merged file of corrections from 02-16 and 03-11
 
 
 # Set up
@@ -49,7 +50,9 @@ library(tidyverse)
 git_root <- system("git rev-parse --show-toplevel", intern=TRUE)
 output_dir <- "output"
 data_flawed <- read.csv(file.path(git_root, "data", "song", "motifs", "song.by.motif.data_2024-12-27.csv"))
-data_fixes <- read.csv(file.path(git_root, "data", "song", "motifs", "Tara.Empsome_2025-02-16_fixed.motif.data.csv"))
+# data_fixes <- read.csv(file.path(git_root, "data", "song", "motifs", "Tara.Empsome_2025-02-16_fixed.motif.data.csv"))
+# Update file used
+data_fixes <- read.csv(file.path(git_root, "data", "song", "motifs", "Tara.Empsome_2025-02-16.and.03-11_combined.csv"))
 
 clipped_file_name_fix <- data_fixes$Clipped.File.Name
 
@@ -63,4 +66,3 @@ write_csv(data, file = file.path(git_root, "data", "song", "motifs", "motif.data
 )
 
 ```
-	
