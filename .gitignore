@@ -16,3 +16,5 @@ tmp*.pdf
 .DS_Store
 testing.Rda
 .#*
+#*
+*~

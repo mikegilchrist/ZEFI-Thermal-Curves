@@ -124,28 +124,31 @@ motif_data_renamed <- data_new  |>
   mutate(date = lubridate::mdy(date),
          start_song = stringToSeconds(start_song),
          end_song = stringToSeconds(end_song),
+         song_start = pmin(start_song, end_song),
+         song_end = pmax(start_song, end_song),        
          post_song_motif = str_detect(post_song_motif, " *(Y|y)es *"),
-         length_song = end_song - start_song,
-         male = str_replace(male, "_misc_motifs", "") ## filter later
-         ) |>
-    arrange(male, date, start_song) %>%
-    dplyr::select(!end_song)  ## now redundant with info in length_song
+         song_length = song_end - song_start,
+         #male = str_replace(male, "_misc_motifs", ""), ## filter later
+         date_file = str_replace(file, "T[0-9]+_([^_]+)_([^_]+)_([^_]+)_[0-9]+", "\\3-\\1-\\2"),
+         date_file = if_else(is.na(date_file), as.Date(NA), lubridate::ymd(date_file))
+         )|>
+    arrange(male, date, song_start) %>%
+    ## Test to see if song_length is negative, if so, switch order of song_start and song_end
+    
+    #dplyr::select(!song_end) %>%  ## now redundant with info in song_length
+    identity()
 
-motif_data_detailed <- motif_data_renamed %>% filter(!(is.na(file) & is.na(start_song)))
-motif_data_misc <- motif_data_renamed %>% filter((is.na(file) & is.na(start_song)))
+motif_data_detailed <- motif_data_renamed %>% filter(!(is.na(file) & is.na(song_start)))
+motif_data_misc <- motif_data_renamed %>%
+    mutate(male = str_replace(male, "_misc_motifs", "") ) #filter((is.na(file) & is.na(song_start)))
 ## Check if there are any disagreements between date and file columns
 try(
   if(
-  motif_data_detailed |>
-    mutate(
-        date_file = str_replace(file, "T[0-9]+_([^_]+)_([^_]+)_([^_]+)_[0-9]+", "\\3-\\1-\\2")
-    ) |>
-#  rowwise() |> 
-    mutate(date_file = if_else(is.na(date_file), as.Date(NA), lubridate::ymd(date_file))
-    ) |>  filter(date != date_file) |>
+  motif_data_detailed |>  filter(date != date_file) |>
   dplyr::select(male, file, date_file, date) |>
     nrow() != 0) stop("Dates in file and date columns don't match!")
 )
+
 ```
 
 ```{r}
@@ -153,11 +156,22 @@ try(
 ## Extract motif data assigned to songs
 ## Add trial and song index columns
 motif_data <- motif_data_detailed |>
-#  filter(!(is.na(file))) |>
-  group_by(male, date) |>
-#  mutate(trial = min_rank(date)) |>  # This doesn't work as expected because the same dates across songs are not merged
-  mutate(song_index = row_number()) |>
-  ungroup()
+    ##  filter(!(is.na(file))) |>
+    group_by(male, date) |>
+    ##  mutate(trial = min_rank(date)) |>  # This doesn't work as expected because the same dates across songs are not merged, but treated as instances, so the same date is counted many times with the same ranking
+    mutate(song_index = row_number()) |>
+    ungroup() |>
+    select(!c(start_song, end_song, date_file)) |>
+    relocate(c(file, post_song_motif, notes), .after=last_col()) |>
+    relocate(c(song_index), .before=song_length) |>
+    relocate(c(song_start, song_end), .after=song_length) |>
+    arrange(desc(song_length))
+
+motif_wrong <- motif_data %>% filter(song_length > 14) %>% arrange(date, file)
+motif_wrong_file <- filter(data_new, Clipped.File.Name %in% motif_wrong$file)
+
+write_csv(motif_wrong_file, file = "need.checking_2025-03-10.csv")
+          
  
 ## Summarize song and within song motif data
 motif_summary <- motif_data |>
@@ -166,20 +180,23 @@ motif_summary <- motif_data |>
             motif_sum = sum(motifs),
             motif_sd = sd(motifs),
             motif_mean = mean(motifs),
-            length_song_sum = sum(length_song),
-            length_song_sd = sd(length_song),
-            motif_mean_length = length_song_sum/motif_sum,
-            motif_sd_length = sd(length_song/motifs),
+            song_length_sum = sum(song_length),
+            song_length_sd = sd(song_length),
+            motif_length_mean = song_length_sum/motif_sum,
+            motif_length_sd = sd(song_length/motifs),
             post_song_sum = sum(post_song_motif),
             post_song_freq = post_song_sum/motif_sum
-            ) %>%
-    replace(is.na(.), 0) %>% # Replace NAs with 0s
-    mutate(across(c("motif_sd", # Re-replace 0s in SD with NAs 
-                    "length_song_sd",
-                    "motif_sd_length"), 
-                  ~ifelse(.==0, NA, .)
-                  )
-           )
+            )
+
+
+#%>%
+#    replace(is.na(.), 0) %>% # Replace NAs with 0s
+#    mutate(across(c("motif_sd", # Re-replace 0s in SD with NAs 
+#                    "song_length_sd",
+#                    "motif_length_sd"), 
+#                  ~ifelse(.==0, NA, .)
+#                  )
+#           )
 
 
 ```
