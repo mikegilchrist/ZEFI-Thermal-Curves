@@ -1,0 +1,165 @@
+﻿ Re: Inconsistent dates?
+Subject:
+Re: Inconsistent dates?
+From:
+"Empson, Tara" <tempson@vols.utk.edu>
+Date:
+3/18/25, 11:30
+To:
+"Gilchrist, Michael" <mikeg@utk.edu>, "Derryberry, Elizabeth" <ederryb1@utk.edu>
+
+Hi Mike,
+
+ 
+
+Here were the errors and solutions I found when going through the data myself.
+
+ 
+
+Original data entries (birds and dates) missing corresponding more recent and more detailed data entries
+	
+
+More recent and more detailed data entries (birds and dates) missing corresponding original data entries
+
+1 T230 1 1 2022-02-23 0 NA 0 44.2 19.0
+	
+
+1 T230 NA NA 2022-02-13 NA 0 NA NA NA
+
+This seems to be most likely a typo that for the trial where the male is “T230” and the date is "2022-02-13” it should actually be "2022-02-23”. Since that day is missing an observation from that bird.
+
+ 
+
+Original data entries (birds and dates) missing corresponding more recent and more detailed data entries
+	
+
+More recent and more detailed data entries (birds and dates) missing corresponding original data entries
+
+2 T247 2 3 2022-04-15 80 NA 0.0538 39.1 20.8
+	
+
+5 T247 NA NA 2022-04-16 NA 18 NA NA NA
+
+3 T236 2 3 2022-04-15 196 NA 0.0936 38.2 21.3
+	
+
+3 T236 NA NA 2022-04-16 NA 35 NA NA NA
+
+4 T243 2 3 2022-04-15 229 NA 0.123 37.5 22.8
+	
+
+4 T243 NA NA 2022-04-16 NA 44 NA NA NA
+
+This seems to be an obvious typo that for the trials where the date is "2022-04-16” it should actually be "2022-04-15” as there is no record of a trial being ran on the April 16th 2022. Additionally, April 16th is missing and observation from each of those birds.
+
+ 
+
+Original data entries (birds and dates) missing corresponding more recent and more detailed data entries
+	
+
+More recent and more detailed data entries (birds and dates) missing corresponding original data entries
+
+ 
+	
+
+2 T235 NA NA 2022-06-25 NA 9 NA NA NA
+
+I don’t see T235_June_25_2022 in any of the datasheets or raw files. When I looked through Tamara’s scoring it seems to be that she had a typo in the bird ID column. This information is for “T234”.
+
+ 
+
+Original data entries (birds and dates) missing corresponding more recent and more detailed data entries
+	
+
+More recent and more detailed data entries (birds and dates) missing corresponding original data entries
+
+ 
+	
+
+6 T258 NA NA 2022-07-20 NA 19 NA NA NA
+
+The trial for T258 on 2022-07-20 should be excluded, he was showing signs of extreme heat stress, so his trial ended early (we turned off the chamber and opened the door). The trail was redone a few days later. There are songs jut because the mic was left on due to the other trials for that day continuing.
+
+ 
+
+Lastly,
+
+Original data entries (birds and dates) missing corresponding more recent and more detailed data entries
+	
+
+More recent and more detailed data entries (birds and dates) missing corresponding original data entries
+
+5 T231 2 1 2022-05-05 14 NA 0.0106 39.0 23.8
+	
+
+ 
+
+It seems this trial was somehow missed being scored the first time around, I was able to find the raw data of this trail. I had Tamara score it and attached the data.
+
+ 
+
+Cheers,
+
+Tara Empson (she/her)
+
+PhD Candidate, Derryberry Lab
+
+Ecology and Evolutionary Biology
+
+University of Tennessee, Knoxville
+
+ 
+
+From: Gilchrist, Michael <mikeg@utk.edu>
+Date: Friday, March 14, 2025 at 1:57 PM
+To: Empson, Tara <tempson@vols.utk.edu>, Derryberry, Elizabeth <ederryb1@utk.edu>
+Subject: Inconsistent dates?
+
+Hi,
+
+I’m still trying to ensure I’m importing and processing the data correctly.
+
+I believe the dates in the original data I was sent way back in 2023 and the more recent data have a few mismatches
+Original data entries (birds and dates) missing corresponding more recent and more detailed data entries
+
+male round trial_round date song_count.x song_count.y song_prop temp_mean humidity_mean
+
+
+
+1 T230 1 1 2022-02-23 0 NA 0 44.2 19.0
+2 T247 2 3 2022-04-15 80 NA 0.0538 39.1 20.8
+3 T236 2 3 2022-04-15 196 NA 0.0936 38.2 21.3
+4 T243 2 3 2022-04-15 229 NA 0.123 37.5 22.8
+5 T231 2 1 2022-05-05 14 NA 0.0106 39.0 23.8
+More recent and more detailed data entries (birds and dates) missing corresponding original data entries
+
+male round trial_round date song_count.x song_count.y song_prop temp_mean humidity_mean
+
+
+
+1 T230 NA NA 2022-02-13 NA 0 NA NA NA
+2 T235 NA NA 2022-06-25 NA 9 NA NA NA
+3 T236 NA NA 2022-04-16 NA 35 NA NA NA
+4 T243 NA NA 2022-04-16 NA 44 NA NA NA
+5 T247 NA NA 2022-04-16 NA 18 NA NA NA
+6 T258 NA NA 2022-07-20 NA 19 NA NA NA
+
+I’m hoping the issues are due to typos in the newest data. Either way, could you please help me resolve these inconsistencies?
+
+Thanks,
+
+Mike
+
+-- 
+
+Michael A. Gilchrist, Ph.D. (He/Him)
+
+Associate Professor
+
+Ecology & Evolutionary Biology
+
+University of Tennesse Knoxville
+
+&#8203;
+Attachments:
+Missing_scoring_T231_2022-05-05.xlsx	9.1 KB
