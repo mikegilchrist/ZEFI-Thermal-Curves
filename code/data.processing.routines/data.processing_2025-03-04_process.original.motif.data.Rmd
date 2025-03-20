@@ -25,7 +25,7 @@ if(interactive()) {
 # Goal
 
 - Directly copied from data.processing_2023-04-05.Rmd
-- Main change: Substitute 'motif' for 'song' given it is more accurate. -- THIS IS INCORRECT. THIS DATA IS AT THE MOTIF LEVEL!
+- Main change: Substitute 'motif' for 'song' given it is more accurate.
 
 
 # Set up
@@ -115,18 +115,18 @@ git_root <- system("git rev-parse --show-toplevel", intern = TRUE)
 
 motif_data_raw = list()
 
-song_data_raw[[1]] <- read.csv(file.path(git_root, "data", "collated", "HSPi-Round-1-Heat-Trials.csv")) %>% mutate(round = 1) %>%
+motif_data_raw[[1]] <- read.csv(file.path(git_root, "data", "motifs.only", "HSPi-Round-1-Heat-Trials.csv")) %>% mutate(round = 1) %>%
     ## Note T237 and T230 are missing numbers in the song_count column
     ## so we are filtering these observations out until they are found
     ## Removing filter
     ##filter(!is.na(motif_count))
     identity()
 
-song_data_raw[[2]] <- read.csv(file.path(git_root, "data", "collated", "HSPi-Repeatability-Song-Count.csv")) %>%
+motif_data_raw[[2]] <- read.csv(file.path(git_root, "data", "motifs.only", "HSPi-Repeatability-Song-Count.csv")) %>%
     mutate(round = 2) %>%
     ungroup()
 
-song_data_raw[[3]] <-read.csv(file.path(git_root, "data", "collated", "HSPi-Round-2-Heat-Trials.csv")) %>%
+motif_data_raw[[3]] <-read.csv(file.path(git_root, "data", "motifs.only", "HSPi-Round-2-Heat-Trials.csv")) %>%
     mutate(round = 3) %>%
     ## Deal with missing temp_mean and humidity_mean values
     ## in round == 3

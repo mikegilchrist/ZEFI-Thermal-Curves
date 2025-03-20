@@ -49,6 +49,7 @@ library(tidyverse)
 
 git_root <- system("git rev-parse --show-toplevel", intern=TRUE)
 output_dir <- "output"
+## This was the original data which as flaws and *some* corrections per tara's email on 03-18-2025
 data_flawed <- read.csv(file.path(git_root, "data", "song", "song.by.motif.data_2025-03-20_corrected.csv"))
 # data_fixes <- read.csv(file.path(git_root, "data", "song", "Tara.Empson_2025-02-16_fixed.motif.data.csv"))
 # Update file used
@@ -63,7 +64,7 @@ data <- bind_rows(data_fixes, data_tmp) %>%
     arrange(Male, Date, Clipped.File.Name) %>%
     identity()
 
-write_csv(data, file = file.path(git_root, "data", "song", "song.data_2025-03-20_correctedand.merged.csv"),
+write_csv(data, file = file.path("output", "song.data_2025-03-20_corrected.and.merged.csv"),
           quote="needed"
 )
 
