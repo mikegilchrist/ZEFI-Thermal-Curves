@@ -34,6 +34,7 @@ library(stats)
 #require(MASS) # provides negative binomial fitting:  glm.nb, but select conflicts with dplyr
 library(tidyverse)
 library(knitr)
+library(humidity) ## provides VPD
 ```
 ## Local Functions
 
@@ -72,7 +73,7 @@ data_new <- read.csv(file.path(git_root, "data", "song", "motifs", "merged.motif
 
 ```{r}
 
-motif_data_renamed <- data_new  |>
+song_data_renamed <- data_new  |>
   rename(male = Male,
          date = Date,
          file = Clipped.File.Name,
@@ -98,16 +99,16 @@ motif_data_renamed <- data_new  |>
     #dplyr::select(!song_end) %>%  ## now redundant with info in song_length
     identity()
 
-motif_data_detailed <- motif_data_renamed %>% filter(!(str_detect(male, "_misc_motifs")))
+song_data_detailed <- song_data_renamed %>% filter(!(str_detect(male, "_misc_motifs")))
 
-motif_data_misc <- motif_data_renamed %>%
+song_data_misc <- song_data_renamed %>%
     filter(str_detect(male, "_misc_motifs")) %>% 
     mutate(male = str_replace(male, "_misc_motifs", ""),
            motif_misc = motif) #filter((is.na(file) & is.na(song_start)))
 ## Check if there are any disagreements between date and file columns
 try(
   if(
-  motif_data_detailed |>  filter(date != date_file) |>
+  song_data_detailed |>  filter(date != date_file) |>
   dplyr::select(male, file, date_file, date) |>
     nrow() != 0) stop("Dates in file and date columns don't match!")
 )
@@ -118,7 +119,7 @@ try(
 
 ## Extract motif data assigned to songs
 ## Add trial and song index columns
-motif_data <- motif_data_detailed |>
+song_data <- song_data_detailed |>
     ##  filter(!(is.na(file))) |>
     arrange(male, date, song_start) %>%
     group_by(male, date) |>
@@ -132,29 +133,29 @@ motif_data <- motif_data_detailed |>
 #    arrange(desc(song_length)) %>%
     identity()
 
-motif_wrong <- motif_data %>% filter(song_length > 14) %>% arrange(date, file)
+motif_wrong <- song_data %>% filter(song_length > 14) %>% arrange(date, file)
 motif_wrong_file <- filter(data_new, Clipped.File.Name %in% motif_wrong$file)
 
 if(length(motif_wrong)) write_csv(motif_wrong_file, file = "need.checking_2025-03-10.csv")
           
  
 ## Summarize song and within song motif data
-motif_summary <- motif_data |>
+song_summary <- song_data |>
   group_by(male, date) |>
     summarize(song_count = if_else(sum(motif) > 0, max(song_index), 0),
-              song_motif_sum = sum(motif),
+              song_motif_count = sum(motif),
             song_motif_mean = mean(motif),
             song_motif_sd = sd(motif),
             song_length_sum = sum(song_length),
             song_length_sd = sd(song_length),
             song_motif_length_mean = mean(song_length/motif),
             song_motif_length_sd = sd(song_length/motif),
-            post_song_sum = sum(post_song_motif),
-            post_song_freq = post_song_sum/song_motif_sum
+            post_song_motif_occurances = sum(post_song_motif),
+            post_song_motif_freq = post_song_motif_occurances/(song_motif_count)
             ) %>% 
-    left_join(motif_data_misc) %>% 
+    left_join(song_data_misc) %>% 
     mutate(motif_misc = if_else(is.na(motif_misc), 0, motif_misc)) %>%
-    mutate(motif_count = song_motif_sum +  motif_misc, .before = song_count) %>%
+    mutate(motif_count = song_motif_count +  motif_misc, .before = song_count) %>%
     identity()
 
 
@@ -182,7 +183,7 @@ if(interactive()) {
 
 comment <- paste0("Data created using file data_processing_2025-03-03.Rmd on ", date()) 
 
-save_obj <- c("motif_data", "motif_data_detailed", "motif_data_misc", "motif_summary")
+save_obj <- c("song_data", "song_data_detailed", "song_data_misc", "song_summary")
 
 
 ## Add comments
