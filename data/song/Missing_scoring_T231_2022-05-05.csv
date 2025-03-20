@@ -1,0 +1,5 @@
+Male,Date,Clipped File Name,Timestamp Start,Timestamp End,Number of Motifs,Any motifs after .5 gap,Other notes
+T231,5/5/2022,T231_May_5_2022_1,38m 7s,38m 11s,5,No,
+T231,5/5/2022,T231_May_5_2022_2,53m 7s,53m 13s,7,Yes,There is an 8th motif after a .79 sec pause
+T231,5/5/2022,T231_May_5_2022_3,54m 18s,54m 22s,3,No,
+T231_misc_motifs,5/5/2022,NA,NA,NA,2,NA,
