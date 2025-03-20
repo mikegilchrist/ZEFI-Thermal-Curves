@@ -36,13 +36,14 @@ if(interactive()) {
 
 
 ## load libraries
-library(stats)
-require(MASS) # provides negative binomial fitting:  glm.nb
-library(RSQLite)  # Don't think we need this.
-library(rTPC)  ## 
-library(nls.multstart)
-library(broom)
+#library(MASS) # provides negative binomial fitting:  glm.nb
+#library(stats)
 library(tidyverse)
+#library(RSQLite)  # Don't think we need this.
+library(humidity) ## provides VPD
+#library(rTPC)  ## 
+#library(nls.multstart)
+#library(broom)
 library(ggplot2)
 library(ggpubr)
 library(grid) ## provides textGrob
@@ -55,15 +56,6 @@ library(viridisLite)
 #        ggplot2.scale_fill_continuous = scale_fill_viridis_c)
 
 library(GGally)
-library(reshape2)
-library(lme4)
-library(nlme)
-library(gnm)
-library(rsample) ## provides bootstraps()
-
-library(RVAideMemoire) # provides overdisp.glmer()
-library(humidity) ## provides VPD
-library(weathermetrics)
 library(latex2exp)
 
 ```
@@ -121,20 +113,20 @@ output_dir <- "output"
 if(!dir.exists(output_dir)) dir.create(output_dir)
 git_root <- system("git rev-parse --show-toplevel", intern = TRUE)
 
-song_data_raw = list()
+motif_data_raw = list()
 
-song_data_raw[[1]] <- read.csv(file.path(git_root, "data", "chamber-temp-and-humidity", "HSPi-Round-1-Heat-Trials.csv")) %>% mutate(round = 1) %>%
+song_data_raw[[1]] <- read.csv(file.path(git_root, "data", "collated", "HSPi-Round-1-Heat-Trials.csv")) %>% mutate(round = 1) %>%
     ## Note T237 and T230 are missing numbers in the song_count column
     ## so we are filtering these observations out until they are found
     ## Removing filter
-    ##filter(!is.na(song_count))
+    ##filter(!is.na(motif_count))
     identity()
 
-song_data_raw[[2]] <- read.csv(file.path(git_root, "data", "chamber-temp-and-humidity", "HSPi-Repeatability-Song-Count.csv")) %>%
+song_data_raw[[2]] <- read.csv(file.path(git_root, "data", "collated", "HSPi-Repeatability-Song-Count.csv")) %>%
     mutate(round = 2) %>%
     ungroup()
 
-song_data_raw[[3]] <-read.csv(file.path(git_root, "data", "chamber-temp-and-humidity", "HSPi-Round-2-Heat-Trials.csv")) %>%
+song_data_raw[[3]] <-read.csv(file.path(git_root, "data", "collated", "HSPi-Round-2-Heat-Trials.csv")) %>%
     mutate(round = 3) %>%
     ## Deal with missing temp_mean and humidity_mean values
     ## in round == 3
@@ -150,43 +142,43 @@ song_data_raw[[3]] <-read.csv(file.path(git_root, "data", "chamber-temp-and-humi
 
 
 ## Join data and discard empty columns
-song_data_full <- full_join(song_data_raw[[1]], song_data_raw[[2]]) %>%
-    full_join(song_data_raw[[3]]) %>%
-    rename(song_count = motif_count,
-           song_rate = motif_rate) %>%
+motif_data_full <- full_join(motif_data_raw[[1]], motif_data_raw[[2]]) %>%
+    full_join(motif_data_raw[[3]]) %>%
+    rename(motif_count = motif_count,
+           motif_rate = motif_rate) %>%
     discard(~all(is.na(.) | . =="")) %>% ## get rid of columns of only NA
-    mutate(n_obs_completed = !(is.na(song_count)),
+    mutate(n_obs_completed = !(is.na(motif_count)),
            date = lubridate::mdy(date),  # Convert string to date class
-           song_count = ifelse(is.na(song_count), 0, song_count)) %>%
-#    mutate(song_count = song_count*1.0) %>% ## convert to a double so it's not treated as an integer
+           motif_count = ifelse(is.na(motif_count), 0, motif_count)) %>%
+#    mutate(motif_count = motif_count*1.0) %>% ## convert to a double so it's not treated as an integer
     mutate(chamber = as.factor(chamber), male = as.factor(male)) %>%
     ## create a male specific round and global trial index `trial`
     group_by(male, round) %>%
     mutate(trial_round = rank(date)) %>%
     ungroup() %>%
-    mutate(song_count_plus_1 = as.integer((song_count + 1))) %>%
-    mutate(log_song_count_plus_1 = log(song_count + 1)) %>%
+    mutate(motif_count_plus_1 = as.integer((motif_count + 1))) %>%
+    mutate(log_motif_count_plus_1 = log(motif_count + 1)) %>%
     mutate(temp_target = as.numeric(temp_target)) %>%
     ## Create generic 'temp' column which is either
     ## temp_mean, if it exists, or temp_target, if it doesn't
     mutate(temp = if_else(is.na(temp_mean),
                           temp_target,
                           temp_mean)) %>%
-    ## Add column with a male's total song_count for a given round
+    ## Add column with a male's total motif_count for a given round
     group_by(male, round) %>%
-    mutate(count_total_round = sum(song_count),
-           n_obs_round = length(song_count),
+    mutate(count_total_round = sum(motif_count),
+           n_obs_round = length(motif_count),
            count_mean_round = count_total_round/n_obs_round,
-           count_sd_round = sd(song_count),
+           count_sd_round = sd(motif_count),
            count_cv_round = count_sd_round/count_mean_round) %>%
     ungroup() %>%
     group_by(male) %>%
-    mutate(count_total = sum(song_count),
-           n_obs = length(song_count),
+    mutate(count_total = sum(motif_count),
+           n_obs = length(motif_count),
            count_mean = count_total/n_obs) %>% 
     mutate(trial = as.integer(rank(date))) %>%
-    mutate(song_prop_round = song_count/count_total_round) %>%
-    mutate(song_prop = song_count/count_total) %>%
+    mutate(motif_prop_round = motif_count/count_total_round) %>%
+    mutate(motif_prop = motif_count/count_total) %>%
     ungroup(male) %>% 
     ## assuming poisson error
     ## From glm man page
@@ -201,10 +193,10 @@ song_data_full <- full_join(song_data_raw[[1]], song_data_raw[[2]]) %>%
     ## >  wfct() returns a vector of weights that are calculated from a user-defined expression and transfers this vector within nls.
     ##  - one option is 1/fitted, which seems ideal.
     ##
-    ## For now set weights = 1/(song_count + 1)
+    ## For now set weights = 1/(motif_count + 1)
     ## - add +1 to deal with 0's
-    mutate(weights = 1/(song_count + 1)) %>%
-    ## need to rescale wts for song_prop data
+    mutate(weights = 1/(motif_count + 1)) %>%
+    ## need to rescale wts for motif_prop data
     ##mutate(weight_prop = weight_count * count_total_round) %>% 
     ## Add vpd 
   mutate(svp = SVP(t = temp_mean + 273.15, isK = TRUE),
@@ -212,52 +204,52 @@ song_data_full <- full_join(song_data_raw[[1]], song_data_raw[[2]]) %>%
   rename(bill_date = date_morph_data_collected) %>% 
   mutate(vpd_offset = vpd - mean(vpd)) %>%
   ungroup() %>%
-  relocate(round, trial_round, song_count, song_prop, temp_mean, humidity_mean, .after = male) %>%
-  mutate() #song_count = as_integer(song_count),
+  relocate(round, trial_round, motif_count, motif_prop, temp_mean, humidity_mean, .after = male) %>%
+  mutate() #motif_count = as_integer(motif_count),
          #) ## Dummy function so we can comment out lines above it w/o any issues
 
 
 
 ## Extract information on each male's bill
-bird_bill_data <- song_data_full %>%
+bird_bill_data <- motif_data_full %>%
     select(male, bill_depth, bill_length, bill_width, bill_date)
 
 
-song_stats <- song_data_full %>%
+motif_stats <- motif_data_full %>%
     select(male, round, n_obs, starts_with("count_")) %>%
     unique()
-names(song_stats) <- names(song_stats) %>% sub("^count_", "", .)
+names(motif_stats) <- names(motif_stats) %>% sub("^count_", "", .)
 
 ## Remove columns on male bills
-song_data <- song_data_full %>%
+motif_data <- motif_data_full %>%
     select( -starts_with("bill_")) %>%
     select( -starts_with(c("count_")))
 ## Create small subset of data.
 
-song_data_40C  <- song_data %>%
+motif_data_40C  <- motif_data %>%
     filter(temp_target == 40) %>%
     unique()
 
-dim(song_data_40C)
+dim(motif_data_40C)
 
 ## Get stats for subset
 ## Original approach
-song_stats_40C <- song_data_40C %>%
+motif_stats_40C <- motif_data_40C %>%
     group_by(male) %>%
-    summarize(n_obs = length(song_count),
-              mean = mean(song_count),
-              var = var(song_count, na.rm = TRUE),
+    summarize(n_obs = length(motif_count),
+              mean = mean(motif_count),
+              var = var(motif_count, na.rm = TRUE),
               cv = sqrt(var)/mean,
               dispersion = var/mean) %>%
     replace(is.na(.), 0)
 
 
 print("We have 15 males, 5 of which we only have 1 observation at 40C")
-song_stats_40C
+motif_stats_40C
 
 comment <- paste0("Data created using file ", file_name, " on ", date()) 
 
-save_obj <- c("song_data_full", "song_data", "song_data_40C", "song_stats", "song_stats_40C", "bird_bill_data")
+save_obj <- c("motif_data_full", "motif_data", "motif_data_40C", "motif_stats", "motif_stats_40C", "bird_bill_data")
 
 
 ## Add comments
@@ -273,33 +265,33 @@ save(list = save_obj, file = paste0(file.path("output", file_name)) )
 ```
 
 
-## Plot song_count
+## Plot motif_count
 
 
 ```{r}
 
-g1 <- ggplot(data = song_data) +
-    aes(x = temp, y = song_count, color = male) +
+g1 <- ggplot(data = motif_data) +
+    aes(x = temp, y = motif_count, color = male) +
     geom_point() +
     labs(title = "Males unfiltered") +
     theme(legend.position="bottom")
 
-males_filtered_disp <- song_stats_40C %>% filter(dispersion < 50) %>% pull(male)
+males_filtered_disp <- motif_stats_40C %>% filter(dispersion < 50) %>% pull(male)
 
-data_filtered <- song_data %>% filter(male %in% males_filtered_disp)
+data_filtered <- motif_data %>% filter(male %in% males_filtered_disp)
 
 g2 <- ggplot(data = data_filtered) +
-    aes(x = temp, y = song_count, color = male) +
+    aes(x = temp, y = motif_count, color = male) +
     geom_point() +
     labs(title = "Males filtered for dispersion < 50 at 40C") +
     theme(legend.position="bottom")
 
-males_filtered_mean <- song_stats %>% filter(mean > 10) %>% pull(male)
+males_filtered_mean <- motif_stats %>% filter(mean > 10) %>% pull(male)
 males_filtered <- intersect(males_filtered_mean, males_filtered_disp)
-data_filtered <- song_data %>% filter(male %in% males_filtered)
+data_filtered <- motif_data %>% filter(male %in% males_filtered)
 
 g3 <- ggplot(data = data_filtered) +
-    aes(x = temp, y = song_count, color = male) +
+    aes(x = temp, y = motif_count, color = male) +
     geom_point() +
     labs(title = "Males filtered for dispersion < 50 at 40C & count_mean > 10)") +
     theme(legend.position="bottom")

@@ -1,0 +1,97 @@
+---
+title: "Combine song and motif data"
+author: "Michael Gilchrist"
+date: "date: 2025-03-04"
+output: pdf_document
+---
+
+# Goal
+
+- Combine earlier dataset on songs with newer dataset that includes both song and motif data.
+- The original song data has lots of additional variables associated with it, such as chamber temperature, etc.
+
+
+## Match `so` to `motif_data_full`
+
+- match by male and date
+```{r}
+library(tidyverse)
+
+```
+
+```{r}
+load(file.path("output", "data.processing_2025-03-03_process.motif.data.Rda"), verbose = TRUE)
+load(file.path("output", "data.processing_2025-03-04_process.original.song.data.Rda"), verbose = TRUE)
+
+## Avoid ambiguity and poor terminology in previous work
+## at the song level
+# song_data_full <- motif_data_full |>
+#  rename_with( ~str_replace( .x, "motif", "song"))  |>
+#  rename_with( ~str_replace(.x, "^count", "song_count"))
+trial_info <- song_data_full[ , c("male", "date", "trial_round", "temp_target", "temp_mean", "humidity_mean", "vpd", "chamber", "counter", "test_order", "mass")]
+
+## Add trial information to motif data
+song_data_trial <- left_join(motif_data, trial_info, by = c("male", "date"))
+
+## Add motif stats to song_data
+
+song_motif_data_stats <- left_join(song_data_full, motif_summary, by = c("male", "date")) |>
+    relocate(song_count.y, .after="song_count.x") %>%
+    relocate(date, .before="song_count.x") %>%
+#    mutate(song_count.y = if_else(is.na(song_count.y), 0, song_count.y)) %>%
+    identity()
+
+song_motif_data_stats %>% filter(is.na(song_count.y))
+song_motif_data_stats %>% filter(is.na(song_count.x))
+
+
+right_join_song_motif_data_stats <- right_join(song_data_full, motif_summary, by = c("male", "date")) |>
+    relocate(song_count.y, .after="song_count.x") %>%
+    relocate(date, .before="song_count.x") %>%
+#    mutate(song_count.y = if_else(is.na(song_count.y), 0, song_count.y)) %>%
+    identity()
+
+right_join_song_motif_data_stats %>% filter(is.na(song_count.y))
+right_join_song_motif_data_stats %>% filter(is.na(song_count.x))
+
+write_csv(x=song_motif_data_stats, file = "song_motif_data_stats.csv")
+write_csv(x=motif_data_stats, file = "song_motif_data_stats.csv")
+```
+
+## Plot Data
+```{r}
+
+data <- song_motif_data_stats
+
+
+
+not_equal_count <- which(data$song_count.x!=data$song_count.y)
+not_equal_motif <- which(data$song_count.x!=data$song_motif_sum)
+too_few_motifs <- which(data$song_motif_sum < data$song_count.y)
+
+data[not_equal_count, c("song_count.x", "song_count.y", "motif_sum")] |> print(n=150)
+data[too_few_motifs, c("song_count.x", "song_count.y", "motif_sum")] |> print(n=150)
+
+which(data$song_count.x==0 & data$song_count.y>0)
+
+data %>% filter(song_count.x==0 & song_count.y>0)
+
+gg <- ggplot(data = data, aes(song_count.x, song_count.y))
+
+gg + geom_point() +
+    geom_smooth(method='lm', formula= y~x)
+
+
+gg <- ggplot(data = data, aes(song_motif_sum, song_count.x))
+
+gg + geom_point() +
+    geom_smooth(method='lm', formula= y~x)
+
+gg <- ggplot(data = data, aes(motif_count, song_count.x))
+
+gg + geom_point() +
+    geom_smooth(method='lm', formula= y~x) +
+    geom_abline()
+
+data %>% filter(motif_count > 0 & song_count.x == 0)
+```
