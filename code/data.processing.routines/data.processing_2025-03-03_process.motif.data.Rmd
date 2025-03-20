@@ -65,7 +65,7 @@ stringToSeconds <- Vectorize(
 
 git_root <- system("git rev-parse --show-toplevel", intern=TRUE)
 output_dir <- "output"
-data_new <- read.csv(file.path(git_root, "data", "song", "motifs", "merged.motif.data_2025-03-03.csv")) %>% tibble() 
+data_new <- read.csv(file.path(git_root, "data", "song", "merged.motif.data_2025-03-03.csv")) %>% tibble() 
 ```
 
 ## Process New Detailed Song Data

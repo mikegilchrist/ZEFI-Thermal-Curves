@@ -123,16 +123,16 @@ git_root <- system("git rev-parse --show-toplevel", intern = TRUE)
 
 motif_data_raw = list()
 
-motif_data_raw[[1]] <- read.csv(file.path(git_root, "data", "collated", "HSPi-Round-1-Heat-Trials.csv")) %>% mutate(round = 1) %>%
+motif_data_raw[[1]] <- read.csv(file.path(git_root, "data", "chamber-temp-and-humidity", "HSPi-Round-1-Heat-Trials.csv")) %>% mutate(round = 1) %>%
     ## Note T237 and T230 are missing numbers in the motif_count column
     ## so we are filtering these observations out until they are found
     filter(!is.na(motif_count))
 
-motif_data_raw[[2]] <- read.csv(file.path(git_root, "data", "collated", "HSPi-Repeatability-Song-Count.csv")) %>%
+motif_data_raw[[2]] <- read.csv(file.path(git_root, "data", "chamber-temp-and-humidity", "HSPi-Repeatability-Song-Count.csv")) %>%
     mutate(round = 2) %>%
     ungroup()
 
-motif_data_raw[[3]] <-read.csv(file.path(git_root, "data", "collated", "HSPi-Round-2-Heat-Trials.csv")) %>%
+motif_data_raw[[3]] <-read.csv(file.path(git_root, "data", "chamber-temp-and-humidity", "HSPi-Round-2-Heat-Trials.csv")) %>%
     mutate(round = 3) %>%
     ## Deal with missing temp_mean and humidity_mean values
     ## in round == 3
