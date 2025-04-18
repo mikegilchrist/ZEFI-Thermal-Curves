@@ -16,11 +16,11 @@ output: pdf_document
 - match by male and date
 ```{r}
 library(tidyverse)
-
+library(gridExtra)
 ```
 
 ```{r}
-load(file.path("output", "data.processing_2025-03-20_process.song.data.Rda"), verbose = TRUE)
+load(file.path("output", "data.processing_2025-03-20b_process.song.data.Rda"), verbose = TRUE)
 load(file.path("output", "data.processing_2025-03-04_process.original.motif.data.Rda"), verbose = TRUE)
 
 ## Avoid ambiguity and poor terminology in previous work
@@ -31,11 +31,12 @@ load(file.path("output", "data.processing_2025-03-04_process.original.motif.data
 chamber_info <- motif_data_full[ , c("male", "date", "trial_round", "temp_target", "temp_mean", "humidity_mean", "vpd", "chamber", "counter", "test_order", "mass")]
 
 ## Add trial information to song data
-song_motif_chamber_data <- left_join(song_data, chamber_info, by = c("male", "date"))
+song_motif_data <- left_join(song_data, chamber_info, by = c("male", "date"))
 
-## Add motif stats to song_data
-
-song_motif_stats <- left_join(motif_data_full, song_summary, by = c("male", "date")) |>
+## Add motif stats to song_data, and arrange columns
+song_motif_stats_xy <- full_join(motif_data_full, song_summary, by = c("male", "date")) |>
+    relocate(
+        names(song_summary) |> str_replace("^motif_count$", "motif_count.x") ) |> ## Move some columns to left
     relocate(motif_count.y, .after="motif_count.x") %>%
     relocate(date, .before="motif_count.x") %>%
                                         #    mutate(song_count.y = if_else(is.na(song_count.y), 0, song_count.y)) %>%
@@ -43,66 +44,138 @@ song_motif_stats <- left_join(motif_data_full, song_summary, by = c("male", "dat
     arrange(male, .by_group = TRUE) %>%
     identity() 
 
+## Use only second dataset for song and motif counts
+## This is the main data to use moving forward.
+song_motif_stats <- song_motif_stats_xy %>%
+    select(!motif_count.x) %>%
+    rename(motif_count = motif_count.y)
+comment(song_motif_data) <- "Raw motif data for each trial based with chamber informaiton added"
+comment(song_motif_stats) <- "Summary stats for each trial based with chamber informaiton added, based on 'song_motif_data'"
 
 if(FALSE) {
     ## Check for problems/inconsistencies in data
     ## The filtered output should be empty in all cases
-    song_motif_stats %>% filter(is.na(motif_count.y))
-    song_motif_stats %>% filter(is.na(motif_count.x))
+    song_motif_stats_xy %>% filter(is.na(motif_count.y))
+    song_motif_stats_xy %>% filter(is.na(motif_count.x))
 
 
-    right_join_song_motif_stats <- right_join(motif_data_full, song_summary, by = c("male", "date")) |>
+    right_join_song_motif_stats_xy <- right_join(motif_data_full, song_summary, by = c("male", "date")) |>
         relocate(motif_count.y, .after="motif_count.x") %>%
         relocate(date, .before="motif_count.x") %>%
                                         #    mutate(motif_count.y = if_else(is.na(motif_count.y), 0, motif_count.y)) %>%
         identity()
     
-    right_join_song_motif_stats %>% filter(is.na(motif_count.y))
-    right_join_song_motif_stats %>% filter(is.na(motif_count.x))
+    right_join_song_motif_stats_xy %>% filter(is.na(motif_count.y))
+    right_join_song_motif_stats_xy %>% filter(is.na(motif_count.x))
 }
 
 write_csv(x=song_motif_stats, file = file.path("output", "song_motif_stats_2025-03-20.csv"))
-write_csv(x=song_motif_chamber_data, file = file.path("output", "song_motif_chamber_data_2025-03-20.csv"))
+write_csv(x=song_motif_stats_xy, file = file.path("output", "song_motif_stats_xy_2025-03-20.csv"))
+write_csv(x=song_motif_data, file = file.path("output", "song_motif_data_2025-03-20.csv"))
+
+save(song_motif_stats, song_motif_data, file = file.path("output", "song_motif_data_for_analysis_2025-03-20.Rda"))
+
 ```
 
-## Plot Data
+## Gather Incongrous Motif Counts between Dataset Versions
+
 ```{r}
 
-data <- song_motif_stats
+cols_keep <-  c("male", "date", "motif_count.x", "motif_count.y", "song_motif_count", "song_count", "misc_motif_count")
+data <- song_motif_stats_xy[, cols_keep]
+## Add measure of error between datasets
+data$error_motif_xy <-  abs(data$motif_count.x - data$motif_count.y)/(1/2 * (data$motif_count.x + data$motif_count.y))
 
 
-
-not_equal_count <- which(data$motif_count.x!=data$motif_count.y)
-not_equal_motif <- which(data$motif_count.x!=data$motif_count_song_only) ## does not include misc_motifs
-too_few_motifs <- which(data$motif_count_song_only < data$motif_count.y)
-
-data[not_equal_count, c("male", "date", "motif_count.x", "motif_count.y", "motif_count_song_only", "song_count")] |> print(n=150)
-
-data[not_equal_motif, c("male", "date", "motif_count.x", "motif_count.y", "motif_count_song_only", "song_count")] |> group_by(male, date) |>
-    arrange(male, .by_group = TRUE) |> print(n=150)
-
-data[too_few_motifs, c("motif_count.x", "motif_count.y", "song_count")] |> print(n=150)
-
-which(data$motif_count.x==0 & data$motif_count.y>0)
-
-data %>% filter(motif_count.x==0 & motif_count.y>0)
-
-gg <- ggplot(data = data, aes(motif_count.x, motif_count.y))
-
-gg + geom_point() +
-    geom_smooth(method='lm', formula= y~x)
+## Use motif_count.y not motif_count_y
+not_equal_rows <- which(data$motif_count.x!=data$motif_count.y)
+data$not_equal <- FALSE
+data[not_equal_rows, "not_equal"] <- TRUE
+tmp <- data[not_equal_rows, ] |>
+    group_by(male, date) |>
+    arrange(male, .by_group = TRUE)
+tmp |> print(n=40)
+length(not_equal_rows)
 
 
-gg <- ggplot(data = data, aes(song_motif_sum, motif_count.x))
+error_large_rows <- which(
+    data$error_motif_xy > 0.25)
 
-gg + geom_point() +
-    geom_smooth(method='lm', formula= y~x)
+## I suspect this entry is due to a typo (133 entered instead of 33)
+## > T229  2022-06-26           133            34               28          7                6          1.19
+## Remaining ones are troubling, but given the large number of datapoints, not unexpected.
 
-gg <- ggplot(data = data, aes(motif_count, motif_count.x))
+data$error_large <- FALSE
+data[error_large_rows, "error_large"] <- TRUE
+tmp <- data[error_large_rows, ] |> 
+    arrange(error_motif_xy)
+tmp |> print(n=40)
+length(error_large_rows)
 
-gg + geom_point() +
-    geom_smooth(method='lm', formula= y~x) +
+
+## These rows are for T237 which, according to HSPi-Round-1-Heat-Trials.csv, have missing count data
+x_zero_y_not_rows <- which(data$motif_count.x==0 & data$motif_count.y>0)
+data$x_zero_y_not <- FALSE
+data[x_zero_y_not_rows, "x_zero_y_not"] <- TRUE
+
+data[x_zero_y_not_rows,] |>
+    group_by(male, date) |>
+    arrange(male, .by_group = TRUE)
+tmp |> print(n=40)
+length(x_zero_y_not_rows)
+
+## Notes in merged.motif.data_2025-03-03.csv indicate T231 & T235 did not sing during trial.
+## This is especially strange given the insanely high count for T235 on 2022-06-26 of 425 
+## > T231,2/15/2022,NA,NA,NA,0,NA,"did not sing during 30 min trial, sang before only"
+## > T235,6/26/2022,NA,NA,NA,0,NA,Did not sing
+y_zero_x_not_rows <- which(data$motif_count.y==0 & data$motif_count.x>0)
+data$y_zero_x_not <- FALSE
+data[y_zero_x_not_rows, "y_zero_x_not"] <- TRUE
+
+tmp <- data[y_zero_x_not_rows,] |>
+    group_by(male, date) |>
+    arrange(male, .by_group = TRUE)
+tmp |> print(n=40)
+length(y_zero_x_not_rows)
+
+
+data <- data %>%  mutate(incongruous_zeros = case_when( x_zero_y_not ~ 1,
+                                              y_zero_x_not ~2,
+                                              .default = 0) |> as_factor()
+                         )
+
+
+```
+
+
+## Plot Motif Counts for 2 Versions of Dataset
+
+```{r}
+
+
+## Motif vs Song Motifs
+gg <- ggplot(data = data)
+
+p1 <- gg + geom_point(aes(x=motif_count.x, y=motif_count.y, color = incongruous_zeros)) +
+    stat_smooth(mapping = aes(x=motif_count.x, y=motif_count.y),
+                method='lm',
+                formula= y~x,
+                data = ~ filter(.x, incongruous_zeros==0)) +
+    labs(title="Comparing Motif Counts from First Dataset and Song + Non-Song Motif Counts from Second Dataset") +
     geom_abline()
 
-data %>% filter(song_count > 0 & motif_count.x == 0)
+
+## Motif vs Song + Misc Motifs
+p2 <- gg + geom_point(aes(x=motif_count.x, y=song_motif_count, color = incongruous_zeros)) +
+    stat_smooth(mapping = aes(x=motif_count.x, y=song_motif_count),
+                method='lm',
+                formula= y~x,
+                data = ~ filter(.x, incongruous_zeros==0)) +
+     labs(title="Comparing Motif Counts from First Dataset and Song Only Motif Counts from Second Dataset") +
+    geom_abline()
+
+
+grid.arrange(p1, p2, ncol = 2)
+
 ```
+
