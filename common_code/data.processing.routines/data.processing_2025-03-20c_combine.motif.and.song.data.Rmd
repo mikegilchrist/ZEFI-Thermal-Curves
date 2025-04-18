@@ -27,14 +27,31 @@ load(file.path("output", "data.processing_2025-03-04_process.original.motif.data
 ## at the song level
 # song_data_full <- motif_data_full |>
 #  rename_with( ~str_replace( .x, "motif", "song"))  |>
-#  rename_with( ~str_replace(.x, "^count", "song_count"))
-chamber_info <- motif_data_full[ , c("male", "date", "trial_round", "temp_target", "temp_mean", "humidity_mean", "vpd", "chamber", "counter", "test_order", "mass")]
+                                        #  rename_with( ~str_replace(.x, "^count", "song_count"))
+chamber_cols <-  c("temp_target", "temp_mean", "humidity_mean", "vpd", "chamber")
+trial_cols <- c("round", "trial", "trial_round", "counter")  #trial_round = trial wihtin a given round of experiments
+bird_cols <- c("mass", "bill_length", "bill_depth", "bill_width", "bill_date")
+meta_cols <- c("male", "date", "motif_count", trial_cols, chamber_cols, bird_cols)
+
+meta_data <- motif_data_full[ , meta_cols]
 
 ## Add trial information to song data
-song_motif_data <- left_join(song_data, chamber_info, by = c("male", "date"))
+song_motif_data <- left_join(song_data, meta_data, by = c("male", "date"))
+
+
+## Ensure joining is behaivng as expected
+## One confusing row with motif.count-x = NA
+## Trial done one day after previous trial and not in earlier dataset.
+## Given these two facts, I think it's best to drop this trial
+## > T243  2022-04-16            NA            20               20          4 
+right_join(meta_data, song_summary, by = c("male", "date")) |> dim()
+left_join(meta_data, song_summary, by = c("male", "date")) |> dim()
+full_join(meta_data, song_summary, by = c("male", "date")) |> dim()
+
+
 
 ## Add motif stats to song_data, and arrange columns
-song_motif_stats_xy <- full_join(motif_data_full, song_summary, by = c("male", "date")) |>
+song_motif_stats_xy <- left_join(meta_data, song_summary, by = c("male", "date")) |>
     relocate(
         names(song_summary) |> str_replace("^motif_count$", "motif_count.x") ) |> ## Move some columns to left
     relocate(motif_count.y, .after="motif_count.x") %>%
@@ -59,7 +76,7 @@ if(FALSE) {
     song_motif_stats_xy %>% filter(is.na(motif_count.x))
 
 
-    right_join_song_motif_stats_xy <- right_join(motif_data_full, song_summary, by = c("male", "date")) |>
+    right_join_song_motif_stats_xy <- right_join(meta_data, song_summary, by = c("male", "date")) |>
         relocate(motif_count.y, .after="motif_count.x") %>%
         relocate(date, .before="motif_count.x") %>%
                                         #    mutate(motif_count.y = if_else(is.na(motif_count.y), 0, motif_count.y)) %>%
