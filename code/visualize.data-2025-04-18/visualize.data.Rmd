@@ -1,0 +1,99 @@
+---
+title: "Initial Evaluation of Song and Song-Motif Data"
+author: "Michael Gilchrist"
+date: "date: 2025-04-18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = TRUE, # show warnings
+  message = TRUE, # show messages
+  error = TRUE, # do not interrupt generation in case of errors,
+  echo = TRUE#,  # show R code
+  ##results="asis" # Hopefully print summary() in for loops
+  )
+
+
+if(interactive()) default::default(.ess.eval) <- list(max.deparse.length=1E5, output = TRUE)
+
+```
+# Goal
+
+- Visualize second data set where we have both song and motif scaled data.
+
+# Set up
+
+## Load libraries
+
+```{r}
+
+
+## load libraries
+library(tidyverse)
+library(ggpubr)
+library(grid) ## provides textGrob
+library(gridExtra)
+library(viridisLite)
+library(GGally)
+library(reshape2)
+```
+
+
+
+## Local Functions
+
+```{r}
+
+kprint <- function(input, ...) {
+    print(knitr::kable(input, ...))
+cat('\n\n<!-- -->\n\n')
+}
+```
+
+## Local Settings
+
+```{r}
+git_root <- system("git rev-parse --show-toplevel", intern = TRUE)
+
+output_dir <- "output"
+if(!dir.exists(output_dir)) dir.create(output_dir)
+input_dir <- "input"
+if(!dir.exists(input_dir)) dir.create(input_dir)
+
+
+## Plotting settings
+## From: https://data-se.netlify.app/2018/12/12/changing-the-default-color-scheme-in-ggplot2/
+
+theme_set(theme_minimal(base_size = 9))
+theme_update(
+    plot.title = element_text(size = rel(1.1)),
+    plot.subtitle = element_text(size = rel(1)))
+
+if(!exists("old_opts")) old_opts <- options()  # save old options
+
+options(ggplot2.continuous.colour="viridis")
+options(ggplot2.continuous.fill = "viridis")
+options(ggplot2.discrete.colour="viridis")
+options(ggplot2.discrete.fill = "viridis")
+
+
+```
+
+## Load Data
+
+```{r}
+
+load(file.path(input_dir, "song_motif_data_for_analysis_2025-03-20.Rda"),
+               verbose = TRUE)
+```
+
+
+# Examine Data
+
+```{r}
+
+names(song_motif_stats)
+names(song_motif_data)
+
+```

@@ -1,0 +1,200 @@
+---
+title: "Visualize Piecewise Regression with Negative Binomial Type I Error on Real Data using `brms` Custom Family"
+author: "Michael Gilchrist"
+date: "Created: 2023-03-29; Compiled: `r date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, }
+
+knitr::opts_chunk$set(
+  warning = TRUE, # show warnings
+  
+  message = TRUE, # show messages
+  error = TRUE, # do not interrupt generation in case of errors,
+  echo = TRUE,  # show R code
+  fig.width = 7.5,
+  fig.height = 10
+)
+
+
+if(interactive()) {
+  default::default(.ess.eval) <- list(max.deparse.length=2E2, output = TRUE)
+  output_dir <- "output"  
+} else { 
+  output_dir <- file.path("output", "render")
+}
+
+input_dir <- file.path("input")
+```
+# Goal
+
+- Visualize two piece negative binomial type 1 formulation to data
+
+## Recap
+
+- Update to `2023-03-09_visualize.2023-02-28-fit...` for use with more recent fits in `2023-03-18_fit...` folder.
+- Part of challenge is bimodal nature of some male's `x0` and `y0` fits
+  - `T235` and `T236` in particular
+
+
+
+
+## Insights
+
+
+# Set up
+
+## Install libraries
+
+```{r, message = FALSE}
+
+# install packages user might not have by replacing FALSE with TRUE
+
+## load libraries
+library(stats)
+library(MASS) # provides negative binomial fitting:  glm.nb
+library(ggplot2)
+library(ggpubr)
+library(grid)
+library(gridExtra)
+library(ggExtra)
+library(cowplot)
+library(GGally)
+library(RColorBrewer) ## needed to have more than 8 colors with `palette="Set2"
+library(broom)
+library(tidyverse)
+library(viridisLite)
+library(cmdstanr)
+library(rstan)
+options(mc.cores = (parallel::detectCores()-2))
+rstan_options(auto_write = TRUE)
+library(brms)
+library(bayesplot)
+library(tidybayes)
+library(loo)
+library(modelr)
+library(reshape2) ## provides melt
+
+## options(ggplot2.continuous.colour="viridis",
+##        ggplot2.discrete.colour="viridis",
+##        ggplot2.scale_fill_discrete = scale_fill_viridis_d,
+##        ggplot2.scale_fill_continuous = scale_fill_viridis_c)
+
+library(reshape2)
+library(latex2exp)
+
+ggplot2::theme_set(theme_default(base_size = 10))
+## Restore theme settings
+## ggplot2::theme_set(theme_default())
+
+n_cores <- 4
+
+color_scheme_set("viridis")
+
+```
+## Load Local Functions
+
+
+```{r}
+
+source("../Local.Functions/local.functions_ZFI.fittings.R")
+
+```
+
+## Source family
+
+```{r}
+
+```
+
+## Load `input`
+
+```{r}
+
+infile <- last(dir(file.path(input_dir, "tibbles"), "fit_tbl.*"))
+## Override default fo most recent fits
+infile <- "fit_tbl_adapt-delta-0.90.Rda"
+infile_tbl <- file.path(input_dir, "tibbles", infile)
+load(infile_tbl, verbose = TRUE)
+## save filtered tibble incase it becomes corrupted locally
+fit_tbl_orig <- fit_tbl
+fit_tbl <- fit_tbl_orig %>% filter(!(is.na(fit))) 
+
+```
+
+### Add columns to `fit_tbl` for future use
+```{r}
+
+names_col <- c("obs", "epred", "pred", "plots")
+fit_tbl <- add_column_safely(fit_tbl, names_col)
+
+```
+
+## Define and/or Expose Functions used by STAN
+
+```{r}
+
+source("../../../custom-brms-families/families/nbinom_type1.R")
+
+## Define fmax() in case expose_functions()
+fmax <- function(x, x0) max(x, x0)
+
+## Create functions defined in stan's function header
+## Only need to do this once since all fits use the same user
+## defined functions such as "two_piece"
+## Only do this if not already defined or forcing
+force_expose_functions <- FALSE
+if(!exists("two_piece") | force_expose_functions) expose_functions(fit_tbl[[1, "fit"]][[1]], vectorize = TRUE, show_compiler_warnings = FALSE)
+
+```
+
+
+## Generate Columns of Observed Data, Predicted Data and Expected Values 
+
+```{r}
+
+## add rows to fit_tbl if needed
+## Can restore fit_tbl to original values using
+##    fit_tbl <- fit_tbl_orig
+
+force_generate_epred <- FALSE
+force_generate_pred <- force_generate_epred
+force_generate_obs <- force_generate_epred
+
+curr_row_max <- nrow(fit_tbl)
+curr_row_max <- 1
+
+for(curr_row in 1:curr_row_max) {
+  
+  fit_brms <- fit_tbl[[curr_row, "fit"]][[1]]
+
+  if(!is.null(ngrps(fit_brms))) {
+    group = names(ranef(fit_brms))  
+  } else {
+    group = NA
+  }
+  
+  if(length(fit_tbl[[curr_row, "epred"]][[1]]) ==0 | force_generate_epred) {
+    group = names(ranef(fit_brms))
+    epred <- generate_epred_data(fit_brms, group = group)
+    fit_tbl[[curr_row, "epred"]] <-list(epred)
+  }
+
+}
+
+
+
+  if(length(fit_tbl[[curr_row, "pred"]][[1]]) ==0 | force_generate_pred) {
+    pred <- generate_pred_data(fit_brms)
+    fit_tbl[[curr_row, "pred"]] <- list(pred)
+  }
+
+  if(length(fit_tbl[[curr_row, "obs"]][[1]]) ==0 | force_generate_obs) {
+    obs <- fit_brms$data
+    fit_tbl[[curr_row, "obs"]] <-list(obs)
+  }
+
+}
+```
+
