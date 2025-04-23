@@ -28,7 +28,7 @@ load(file.path("output", "data.processing_2025-03-04_process.original.motif.data
 # song_data_full <- motif_data_full |>
 #  rename_with( ~str_replace( .x, "motif", "song"))  |>
                                         #  rename_with( ~str_replace(.x, "^count", "song_count"))
-chamber_cols <-  c("temp_target", "temp_mean", "humidity_mean", "vpd", "chamber")
+chamber_cols <-  c("temp", "temp_target", "humidity_mean", "vpd", "chamber")
 trial_cols <- c("round", "trial", "trial_round", "counter")  #trial_round = trial wihtin a given round of experiments
 bird_cols <- c("mass", "bill_length", "bill_depth", "bill_width", "bill_date")
 meta_cols <- c("male", "date", "motif_count", trial_cols, chamber_cols, bird_cols)

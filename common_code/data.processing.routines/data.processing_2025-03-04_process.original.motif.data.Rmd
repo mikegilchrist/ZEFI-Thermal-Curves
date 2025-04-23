@@ -161,6 +161,14 @@ motif_data_full <- full_join(motif_data_raw[[1]], motif_data_raw[[2]]) %>%
     mutate(temp_target = as.numeric(temp_target)) %>%
     ## Create generic 'temp' column which is either
     ## temp_mean, if it exists, or temp_target, if it doesn't
+    ## There are only two trials at 40 degrees where temp_mean is NA
+    ## Here are those trials using later code
+    ## # A tibble: 2 × 4
+    ## # Groups:   male, date [2]
+    ##  date       male  temp_mean song_count
+    ##  <date>     <chr>     <dbl>      <dbl>
+    ## 1 2022-01-24 T236         NA         21
+    ## 2 2022-04-23 T244         NA         12
     mutate(temp = if_else(is.na(temp_mean),
                           temp_target,
                           temp_mean)) %>%
