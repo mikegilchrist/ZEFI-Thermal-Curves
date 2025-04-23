@@ -88,7 +88,6 @@ load(file.path(input_dir, "song_motif_data_for_analysis_2025-03-20.Rda"),
                verbose = TRUE)
 ```
 
-
 # Examine Data
 
 ```{r}
@@ -96,4 +95,13 @@ load(file.path(input_dir, "song_motif_data_for_analysis_2025-03-20.Rda"),
 names(song_motif_stats)
 names(song_motif_data)
 
+data <- song_motif_stats
+
+gg <- ggplot(data = data)
+
+
+
+
+
 ```
+
