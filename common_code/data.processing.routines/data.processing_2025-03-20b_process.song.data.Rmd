@@ -74,6 +74,11 @@ data_new <- read.csv(file.path("output", "song.data_2025-03-20_corrected.and.mer
 
 ```{r}
 
+## Some observations start around the 2h mark, these seem to be incorrectly notated
+## As a result, adjust their start and stop times accordingly
+
+adjust_time <- 60*118 ## 60sec/min x 118min -> sec 
+
 song_data_renamed <- data_new  |>
   rename(male = Male,
          date = Date,
@@ -85,11 +90,13 @@ song_data_renamed <- data_new  |>
          notes = Other.notes) |>
   mutate(date = lubridate::mdy(date),
          start_song = stringToSeconds(start_song),
+         start_song = if_else(start_song > adjust_time, start_song - adjust_time, start_song), 
          end_song = stringToSeconds(end_song),
+         end_song = if_else(end_song > adjust_time, end_song - adjust_time, end_song), 
          song_start = pmin(start_song, end_song),
          song_end = pmax(start_song, end_song),
          post_song_motif = str_detect(post_song_motif, " *(Y|y)es *"),
-         song_length = song_end - song_start,
+         song_length = (song_end - song_start) + 1,  #add 1 since we are using discrete units. Also avoids songs of length 0
          #male = str_replace(male, "_misc_motifs", ""), ## filter later
          date_file = str_replace(file, "T[0-9]+_([^_]+)_([^_]+)_([^_]+)_[0-9]+", "\\3-\\1-\\2"),
          date_file = if_else(is.na(date_file), as.Date(NA), lubridate::ymd(date_file))
@@ -154,6 +161,9 @@ song_summary <- song_data |>
             song_length_mean = mean(song_length),
             song_length_sd = sd(song_length),
             song_length_cv = song_length_sd/song_length_mean,
+            song_start_min = min(song_start),
+            song_start_max = max(song_start),
+            song_start_range = song_start_max - song_start_min,
             song_start_mean =mean(song_start),
             song_start_sd =sd(song_start),
             song_start_cv = song_start_sd/song_start_mean,
