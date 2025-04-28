@@ -31,12 +31,14 @@ if(interactive()) default::default(.ess.eval) <- list(max.deparse.length=1E5, ou
 
 ## load libraries
 library(tidyverse)
+#library(dplyr)
 library(ggpubr)
 library(grid) ## provides textGrob
 library(gridExtra)
 library(viridisLite)
 library(GGally)
 library(reshape2)
+library(patchwork)
 ```
 
 
@@ -49,6 +51,50 @@ kprint <- function(input, ...) {
     print(knitr::kable(input, ...))
 cat('\n\n<!-- -->\n\n')
 }
+
+
+#' Add an ordered factor column based on decreasing maximum values
+#'
+#' This function adds a new factor column called `order` to the input tibble.
+#' The levels of `order` are based on the decreasing order of the maximum 
+#' `y` value for each unique `identity`.
+#'
+#' @param input_tibble A tibble with at least `identity` and `y` columns.
+#' @param identity Unquoted column name for grouping identities.
+#' @param y Unquoted column name for values to calculate the maximum from.
+#'
+#' @return A tibble with an additional `order` column as an ordered factor.
+#' 
+#' @author Michael Gilchrist in collaboration with R Wizard ChatGPT
+#' @version 1.2
+#' @date 2025-04-23
+#'
+#' @examples
+#' input <- tibble::tibble(
+#'   identity = c("A", "A", "B", "B", "C", "C"),
+#'   x = c(1, 2, 1, 2, 1, 2),
+#'   y = c(10, 20, 15, 25, 5, 30)
+#' )
+#' 
+#' result <- add_order_factor_strict(input, identity, y)
+#' print(result)
+add_order_factor_strict <- function(input_tibble, identity, y) {
+  identity <- rlang::enquo(identity)
+  y <- rlang::enquo(y)
+  
+  order_levels <- input_tibble |>
+    group_by(!!identity) |>
+    summarise(max_y = max(!!y), .groups = "drop") |>
+    arrange(desc(max_y)) |>
+    mutate(order = factor(!!identity, levels = !!identity)) |>
+    select(!!identity, order)
+  
+  output_tibble <- input_tibble |>
+    left_join(order_levels, by = rlang::as_name(identity))
+  
+  return(output_tibble)
+}
+
 ```
 
 ## Local Settings
@@ -65,7 +111,7 @@ if(!dir.exists(input_dir)) dir.create(input_dir)
 ## Plotting settings
 ## From: https://data-se.netlify.app/2018/12/12/changing-the-default-color-scheme-in-ggplot2/
 
-theme_set(theme_minimal(base_size = 9))
+theme_set(theme_linedraw(base_size = 12))
 theme_update(
     plot.title = element_text(size = rel(1.1)),
     plot.subtitle = element_text(size = rel(1)))
@@ -86,21 +132,148 @@ options(ggplot2.discrete.fill = "viridis")
 
 load(file.path(input_dir, "song_motif_data_for_analysis_2025-03-20.Rda"),
                verbose = TRUE)
+
+## motif_count = song_motif_count + misc_motif_count
+names(song_motif_data)
+names(song_motif_stats)
+
 ```
 
 # Examine Data
 
 ```{r}
 
-names(song_motif_stats)
-names(song_motif_data)
-
-data <- song_motif_stats
-
-gg <- ggplot(data = data)
 
 
+outfile_pdf <- file.path(output_dir, "activity.vs.temp.pdf")
+if(is.character(outfile_pdf)) {
+    pdf(file = outfile_pdf,
+        paper = "letter")
+}
 
+
+data <- song_motif_stats %>%
+    mutate(song_count_mean_range = song_count/song_start_range)
+n <- 3 # males per row some facet commands
+
+## Rank males and order them
+grid_order <- data %>%
+  group_by(male) %>%
+  summarize(max_val = max(song_count)) %>%
+  arrange(desc(max_val)) %>%
+  mutate(plot_order = row_number())
+
+## combine data with ordering for plots
+d <- left_join(data, grid_order, by = "male") %>%
+    mutate(trial = factor(trial, levels = sort(unique(trial))),
+           male = factor(male, levels = grid_order$male))
+
+
+for(x_values in c("temp", "song_start_min", "trial", "date")) {
+
+   y_vars <- switch(x_values,
+                    temp = c("song_count", "song_motif_count", "song_motif_mean",
+                             "song_motif_sd", "song_motif_cv",
+                             "song_start_min", "song_start_range",
+                             "song_count_mean_range", "song_start_mean",
+                             "song_start_sd", "song_start_cv"),
+                    song_start_min = c("song_count",
+                                       "song_start_range",
+                                       "song_motif_mean",
+                                       "song_motif_cv"),
+                    trial = c("song_count",
+                              "song_start_min",
+                              "song_start_range",
+                              "song_motif_mean",
+                              "song_motif_cv"),
+                    date = c("song_count",
+                              "song_start_min",
+                              "song_start_range",
+                              "song_motif_mean",
+                              "song_motif_cv")
+                    )
+    
+
+    fill <- switch(x_values,
+                   temp = "trial",
+                   song_start_min = "trial",
+                   trial = "temp",
+                   date = "temp"
+                   )
+
+    fill_d <- switch(x_values,
+                   temp = TRUE,
+                   song_start_min = TRUE,
+                   trial = FALSE,
+                   date = FALSE,
+                   )
+
+    ## Loop through identity columns with user confirmation to continue
+    for (y_values in  y_vars) {
+        cat("\nUsing identity column:", y_values, "\n")
+
+                                        
+
+
+        n_fill <- length(unique(d[[fill]]))
+
+                                        # Improved perceptual color gradient (black -> magenta -> white)
+        #color_palette <- switch(2,
+        #                        colorRampPalette(c("black", "magenta", "white"))(n_fill),
+        #                       color_palette <- viridis(n_fill)
+        #                        )
+        
+
+                                        # Final ggplot2 plot with global control
+        p <- ggplot(d, aes(x = !!sym(x_values), y = !!sym(y_values), fill = !!sym(fill))) +
+            geom_point(size = 2.5, shape = 21, color = "black", stroke = 0.4) +
+            scale_y_continuous(limits = c(0, NA)) + ## ensure range includes 0
+            facet_wrap(~ male, ncol = 3, scales = "free_y") +
+            scale_fill_viridis(discrete = fill_d) +
+                                        #scale_fill_manual(values = color_palette) +
+            labs(
+                title = paste0(y_values, " vs. ", x_values, " by male"),
+                ##    subtitle = paste0("Males ordered by max(", y_values, ")"),
+                x = x_values,
+                y = y_values,
+                fill = fill
+            ) +
+            theme(
+                legend.position = "bottom",
+                strip.text = element_text(face = "bold"),
+                axis.text = element_text(color = "black"),
+                axis.title = element_text(face = "bold")
+            )
+
+        print(p)
+
+        ## Ask user if they want to continue
+        if(FALSE) {
+            response <- readline(prompt = "Do you want to continue to the next variable? ([y]/n): ")
+            
+            if (!(tolower(response) %in% c("", "y"))) {
+                cat("Exiting loop.\n")
+                break
+            }
+        }
+    }
+}
+
+if(is_character(outfile_pdf)) dev.off()
+
+```
+
+```{r}
+
+
+
+
+## Example input tibble
+input_tibble <- tibble::tibble(
+  identity = c("A", "A", "B", "B", "C", "C"),
+  x = c(1, 2, 1, 2, 1, 2),
+  y = c(10, 20, 15, 25, 5, 30)
+)
 
 
 ```
