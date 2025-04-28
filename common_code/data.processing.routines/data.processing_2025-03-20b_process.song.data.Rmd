@@ -66,6 +66,7 @@ stringToSeconds <- Vectorize(
 
 git_root <- system("git rev-parse --show-toplevel", intern=TRUE)
 output_dir <- "output"
+## corrected and merged updated 2025-04-28
 data_new <- read.csv(file.path("output", "song.data_2025-03-20_corrected.and.merged.csv")) %>% tibble() 
 ```
 
@@ -86,7 +87,7 @@ song_data_renamed <- data_new  |>
          start_song = stringToSeconds(start_song),
          end_song = stringToSeconds(end_song),
          song_start = pmin(start_song, end_song),
-         song_end = pmax(start_song, end_song),        
+         song_end = pmax(start_song, end_song),
          post_song_motif = str_detect(post_song_motif, " *(Y|y)es *"),
          song_length = song_end - song_start,
          #male = str_replace(male, "_misc_motifs", ""), ## filter later
@@ -135,9 +136,11 @@ song_data <- song_data_detailed |>
 
 motif_wrong <- song_data %>% filter(song_length > 14) %>% arrange(date, file)
 motif_wrong_file <- filter(data_new, Clipped.File.Name %in% motif_wrong$file)
-
+print(motif_wrong)
 if(length(motif_wrong)) write_csv(motif_wrong_file, file = "need.checking_2025-03-20.csv")
-          
+```
+
+```{r}
  
 ## Summarize song and within song motif data
 song_summary <- song_data |>
@@ -146,10 +149,17 @@ song_summary <- song_data |>
               song_motif_count = sum(motif), ## was motif_count_song_only
             song_motif_mean = mean(motif),
             song_motif_sd = sd(motif),
+            song_motif_cv = song_motif_sd/song_motif_mean,
             song_length_sum = sum(song_length),
+            song_length_mean = mean(song_length),
             song_length_sd = sd(song_length),
+            song_length_cv = song_length_sd/song_length_mean,
+            song_start_mean =mean(song_start),
+            song_start_sd =sd(song_start),
+            song_start_cv = song_start_sd/song_start_mean,
             motifs_per_sec_mean = mean(motif/song_length),
             motifs_per_sec_sd = sd(motif/song_length),
+            motifs_per_sec_cv = motifs_per_sec_sd/motifs_per_sec_mean,
             post_song_motif_occurances = sum(post_song_motif),
             post_song_motif_freq = post_song_motif_occurances/(song_motif_count)
             ) %>% 

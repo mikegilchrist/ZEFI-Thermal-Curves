@@ -52,7 +52,9 @@ output_dir <- "output"
 ## This was the original data which as flaws and *some* corrections per tara's email on 03-18-2025
 data_flawed <- read.csv(file.path(git_root, "data", "song", "song.by.motif.data_2025-03-20_corrected.csv"))
 # data_fixes <- read.csv(file.path(git_root, "data", "song", "Tara.Empson_2025-02-16_fixed.motif.data.csv"))
-# Update file used
+## Update file used
+## Note on 2025-04-28,  I converted T243_April_15_2022 dates to T243_April_16_2022 dates per Tara's email on 03-18
+## This fix needed to be implemented 
 data_fixes <- read.csv(file.path(git_root, "data", "song", "Tara.Empson_2025-02-16.and.03-11_combined.csv"))
 
 clipped_file_name_fix <- data_fixes$Clipped.File.Name

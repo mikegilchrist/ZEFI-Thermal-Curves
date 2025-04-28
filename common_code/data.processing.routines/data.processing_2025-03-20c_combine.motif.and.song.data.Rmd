@@ -59,6 +59,7 @@ song_motif_stats_xy <- left_join(meta_data, song_summary, by = c("male", "date")
                                         #    mutate(song_count.y = if_else(is.na(song_count.y), 0, song_count.y)) %>%
     group_by(male, date) %>%
     arrange(male, .by_group = TRUE) %>%
+    ungroup() %>%
     identity() 
 
 ## Use only second dataset for song and motif counts
